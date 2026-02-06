@@ -1,0 +1,529 @@
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api';
+import { Image as ImageIcon, Pencil, Trash2, MessageCircle, BookOpen, Maximize2, Gamepad2 } from 'lucide-react';
+import { useActiveUser } from '../state/ActiveUserContext';
+import { ExperienceModal, ExperienceForModal } from '../components/ExperienceModal';
+import { Link, useSearchParams } from 'react-router-dom';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { VoiceActionButtons } from '../components/VoiceActionButtons';
+import { useVoicePlayback } from '../hooks/useVoicePlayback';
+import { Modal } from '../components/Modal';
+
+type ExperienceType = 'personality' | 'game' | 'story';
+
+const TAB_CONFIG: { id: ExperienceType; label: string; icon: typeof MessageCircle }[] = [
+  { id: 'story', label: 'Stories', icon: BookOpen },
+  { id: 'game', label: 'Games', icon: Gamepad2 },
+  { id: 'personality', label: 'Chat', icon: MessageCircle },
+];
+
+export const Playground = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as ExperienceType) || 'personality';
+  const [activeTab, setActiveTab] = useState<ExperienceType>(initialTab);
+  
+  const [experiences, setExperiences] = useState<any[]>([]);
+  const [voices, setVoices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [brokenImgById, setBrokenImgById] = useState<Record<string, boolean>>({});
+  const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
+  const [downloadingVoiceId, setDownloadingVoiceId] = useState<string | null>(null);
+  const [audioSrcByVoiceId, setAudioSrcByVoiceId] = useState<Record<string, string>>({});
+
+  const { playingVoiceId, isPaused, toggle: toggleVoice } = useVoicePlayback(async (voiceId) => {
+    let src = audioSrcByVoiceId[voiceId];
+    if (!src) {
+      const b64 = await api.readVoiceBase64(voiceId);
+      if (!b64) return null;
+      src = `data:audio/wav;base64,${b64}`;
+      setAudioSrcByVoiceId((prev) => ({ ...prev, [voiceId]: src! }));
+    }
+    return src;
+  });
+  
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [selectedExperience, setSelectedExperience] = useState<ExperienceForModal | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoExperience, setInfoExperience] = useState<any | null>(null);
+
+  const { activeUserId, activeUser, refreshUsers } = useActiveUser();
+
+  const GLOBAL_IMAGE_BASE_URL = 'https://pub-a64cd21521e44c81a85db631f1cdaacc.r2.dev';
+
+  const imgSrcFor = (p: any) => {
+    if (p?.is_global) {
+      const id = p?.id != null ? String(p.id) : '';
+      if (!id) return null;
+      return `${GLOBAL_IMAGE_BASE_URL}/${encodeURIComponent(id)}.png`;
+    }
+    const src = typeof p?.img_src === 'string' ? p.img_src.trim() : '';
+    if (!src) return null;
+    if (/^https?:\/\//i.test(src)) return src;
+    return convertFileSrc(src);
+  };
+
+  const toTimestamp = (v: any) => {
+    if (v == null) return 0;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+    if (typeof v === 'string') {
+      const asNum = Number(v);
+      if (Number.isFinite(asNum)) return asNum;
+      const ms = Date.parse(v);
+      if (Number.isFinite(ms)) return Math.floor(ms / 1000);
+    }
+    return 0;
+  };
+
+  const load = async () => {
+    try {
+      setError(null);
+      const data = await api.getExperiences(false, activeTab);
+      setExperiences(data);
+      setBrokenImgById({});
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load experiences');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sortedExperiences = useMemo(() => {
+    const arr = Array.isArray(experiences) ? experiences.slice() : [];
+    arr.sort((a, b) => {
+      const aG = Boolean(a?.is_global);
+      const bG = Boolean(b?.is_global);
+      if (aG !== bG) return aG ? 1 : -1;
+      const aT = toTimestamp(a?.created_at);
+      const bT = toTimestamp(b?.created_at);
+      if (aT !== bT) return bT - aT;
+      return 0;
+    });
+    return arr;
+  }, [experiences]);
+
+  useEffect(() => {
+    setLoading(true);
+    load();
+  }, [activeTab]);
+
+  useEffect(() => {
+    const tab = (searchParams.get('tab') as ExperienceType) || 'personality';
+    if (tab !== activeTab) setActiveTab(tab);
+  }, [searchParams, activeTab]);
+
+  useEffect(() => {
+    const focusId = searchParams.get('focus');
+    if (!focusId || loading) return;
+    const el = document.getElementById(`experience-${focusId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [searchParams, experiences, loading]);
+
+  useEffect(() => {
+    const create = searchParams.get('create');
+    if (!create) return;
+    setModalMode('create');
+    setSelectedExperience(null);
+    setModalOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('create');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDownloaded = async () => {
+      try {
+        const ids = await api.listDownloadedVoices();
+        if (!cancelled) setDownloadedVoiceIds(new Set(Array.isArray(ids) ? ids : []));
+      } catch {
+        if (!cancelled) setDownloadedVoiceIds(new Set());
+      }
+    };
+    loadDownloaded();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadVoices = async () => {
+      try {
+        const data = await api.getVoices();
+        if (!cancelled) setVoices(Array.isArray(data) ? data : []);
+      } catch {
+        if (!cancelled) setVoices([]);
+      }
+    };
+    loadVoices();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const voiceById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const v of voices) {
+      if (v?.voice_id) m.set(String(v.voice_id), v);
+    }
+    return m;
+  }, [voices]);
+
+  const downloadVoice = async (voiceId: string) => {
+    setDownloadingVoiceId(voiceId);
+    try {
+      await api.downloadVoice(voiceId);
+      setDownloadedVoiceIds((prev) => {
+        const next = new Set(prev);
+        next.add(voiceId);
+        return next;
+      });
+      try {
+        window.dispatchEvent(new CustomEvent('voice:downloaded', { detail: { voiceId } }));
+      } catch {
+        // ignore
+      }
+    } catch (e: any) {
+      console.error('download_voice failed', e);
+      const msg = typeof e === 'string' ? e : e?.message ? String(e.message) : String(e);
+      setError(msg || 'Failed to download voice');
+    } finally {
+      setDownloadingVoiceId(null);
+    }
+  };
+
+  const togglePlay = async (voiceId: string) => {
+    if (!downloadedVoiceIds.has(voiceId)) return;
+    try {
+      await toggleVoice(voiceId);
+    } catch (e) {
+      console.error('toggleVoice failed', e);
+    }
+  };
+
+  const assignToActiveUser = async (experienceId: string) => {
+    if (!activeUserId) {
+      setError('Select an active user first');
+      return;
+    }
+    try {
+      setError(null);
+      await api.updateUser(activeUserId, { current_personality_id: experienceId });
+      await refreshUsers();
+      try {
+        await api.setAppMode('chat');
+      } catch {
+        // non-blocking
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to assign experience');
+    }
+  };
+
+  const deleteExperience = async (p: any) => {
+    if (p?.is_global) return;
+    try {
+      setError(null);
+      await api.deleteExperience(p.id);
+      await load();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete experience');
+    }
+  };
+
+  const handleEdit = (p: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setModalMode('edit');
+    setSelectedExperience(p);
+    setModalOpen(true);
+  };
+
+  const handleTabChange = (tab: ExperienceType) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
+
+  return (
+    <div>
+      {/* Floating Tab Bar */}
+      <div className="sticky top-0 z-20 -mx-8 px-8 pt-2 pb-4 bg-transparent">
+        <div className="flex justify-center">
+          <div className="inline-flex bg-gray-100 rounded-full p-1 shadow-[0_6px_0_rgba(210,210,210,1)]">
+            {TAB_CONFIG.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`flex items-center gap-2 px-5 py-2 rounded-full font-black uppercase tracking-wide transition-all ${
+                    isActive
+                      ? 'bg-white text-gray-900'
+                      : 'bg-transparent text-gray-500 hover:bg-white'
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <ExperienceModal 
+        open={modalOpen}
+        mode={modalMode}
+        experience={selectedExperience}
+        experienceType={activeTab}
+        onClose={() => setModalOpen(false)}
+        onSuccess={async () => {
+          await load();
+        }}
+      />
+
+      <Modal
+        open={infoOpen}
+        title={infoExperience?.name || '—'}
+        onClose={() => {
+          setInfoOpen(false);
+          setInfoExperience(null);
+        }}
+        panelClassName="w-full max-w-2xl"
+      >
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+          <div className="w-full h-[200px] rounded-[24px] border bg-orange-50/50 border-gray-200 flex items-center justify-center overflow-hidden" 
+style={{
+                            backgroundImage: `radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)`,
+                            backgroundSize: '6px 6px'
+                        }}>
+            {infoExperience && imgSrcFor(infoExperience) && !brokenImgById[String(infoExperience.id)] ? (
+              <img
+                src={imgSrcFor(infoExperience) || ''}
+                alt=""
+                className="h-auto w-auto max-h-full max-w-full object-contain object-center"
+                onError={() => {
+                  setBrokenImgById((prev) => ({ ...prev, [String(infoExperience.id)]: true }));
+                }}
+              />
+            ) : (
+              <ImageIcon size={22} className="text-gray-500" />
+            )}
+          </div>
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-500">About</div>
+            <div className="text-sm text-gray-700 whitespace-pre-wrap">
+              {infoExperience?.short_description || '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-500">Voice</div>
+            <div className="text-sm text-gray-900">
+              {infoExperience?.voice_id
+                ? voiceById.get(String(infoExperience.voice_id))?.voice_name || infoExperience.voice_id
+                : '—'}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {loading && (
+        <div className="retro-card font-mono text-sm">Loading…</div>
+      )}
+      {error && (
+        <div className="retro-card font-mono text-sm">{error}</div>
+      )}
+      {!loading && !error && experiences.length === 0 && (
+        <div className="retro-card font-mono text-sm">
+          No {activeTab === 'personality' ? 'personalities' : activeTab === 'game' ? 'games' : 'stories'} found.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-8">
+        {sortedExperiences.map((p) => (
+          <div
+            key={p.id}
+            id={`experience-${p.id}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => assignToActiveUser(p.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') assignToActiveUser(p.id);
+            }}
+            className={`retro-card relative group text-left cursor-pointer transition-shadow flex flex-col ${activeUser?.current_personality_id === p.id ? 'retro-selected' : 'retro-not-selected'}`}
+style={{
+  padding: "0rem"
+}}
+          >
+            <div className="absolute top-2 right-2 flex flex-col items-center gap-2 z-10">
+              <button
+                type="button"
+                className="retro-icon-btn"
+                aria-label="Details"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setInfoExperience(p);
+                  setInfoOpen(true);
+                }}
+                title="Details"
+              >
+                <Maximize2 size={16} />
+              </button>
+              {!p.is_global && (
+                <button
+                  type="button"
+                  className="retro-icon-btn"
+                  aria-label="Edit"
+                  onClick={(e) => handleEdit(p, e)}
+                  title="Edit"
+                >
+                  <Pencil size={16} />
+                </button>
+              )}
+
+              {!p.is_global && (
+                <button
+                  type="button"
+                  className="retro-icon-btn"
+                  aria-label="Delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void deleteExperience(p);
+                  }}
+                  title="Delete"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+
+            <div className={`flex flex-col items-start gap-4`}>
+              <div className={`w-full`}>
+                {!p.is_global ? (
+                  <label
+                    className={`w-full h-[160px] rounded-t-[24px] ${imgSrcFor(p) ? 'retro-dotted' : ''} bg-white flex items-center justify-center cursor-pointer overflow-hidden`}
+                    title="Upload image"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    {imgSrcFor(p) && !brokenImgById[String(p.id)] ? (
+                      <div className="w-full h-full flex items-center justify-center overflow-hidden">
+                        <img
+                          src={imgSrcFor(p) || ''}
+                          alt=""
+                          className="h-auto w-auto max-h-full max-w-full object-contain object-center origin-center transition-transform duration-200 group-hover:scale-105"
+                          onError={() => {
+                            setBrokenImgById((prev) => ({ ...prev, [String(p.id)]: true }));
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <ImageIcon size={18} className="text-gray-600" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0] || null;
+                        if (!f) return;
+                        try {
+                          const buf = await f.arrayBuffer();
+                          let binary = '';
+                          const bytes = new Uint8Array(buf);
+                          const chunkSize = 0x8000;
+                          for (let i = 0; i < bytes.length; i += chunkSize) {
+                            const chunk = bytes.subarray(i, i + chunkSize);
+                            binary += String.fromCharCode(...chunk);
+                          }
+                          const b64 = btoa(binary);
+                          const ext = (f.name.split('.').pop() || '').toLowerCase();
+                          const savedPath = await api.saveExperienceImageBase64(
+                            String(p.id),
+                            b64,
+                            ext || null
+                          );
+
+                          await api.updateExperience(String(p.id), { img_src: savedPath?.path || savedPath });
+                          await load();
+                        } catch (err: any) {
+                          setError(err?.message || 'Failed to save image');
+                        }
+                      }}
+                    />
+                  </label>
+                ) : (
+                  <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 flex items-center justify-center overflow-hidden"                         
+style={{
+                            backgroundImage: `radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)`,
+                            backgroundSize: '6px 6px'
+                        }}>
+                    {imgSrcFor(p) && !brokenImgById[String(p.id)] ? (
+                      <div className="w-full h-full flex items-center justify-center overflow-hidden">
+                        <img
+                          src={imgSrcFor(p) || ''}
+                          alt=""
+                          className="h-auto w-auto max-h-full max-w-full object-contain object-center origin-center transition-transform duration-200 group-hover:scale-105"
+                          onError={() => {
+                            setBrokenImgById((prev) => ({ ...prev, [String(p.id)]: true }));
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <ImageIcon size={18} className="text-gray-600" />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1 p-4">
+                <h3 className="text-lg font-black leading-tight wrap-break-word retro-clamp-2">{p.name}</h3>
+                <p className="text-gray-600 text-xs font-medium mt-2 retro-clamp-2">
+                  {p.short_description ? String(p.short_description) : '—'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-auto border-t border-gray-200 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Voice</div>
+                  <Link
+                    to={`/voices?voice_id=${encodeURIComponent(p.voice_id)}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="block text-xs font-bold truncate"
+                    title="View voice"
+                  >
+                    {voiceById.get(p.voice_id)?.voice_name || p.voice_id}
+                  </Link>
+                </div>
+
+                <div className="shrink-0">
+                  <VoiceActionButtons
+                    voiceId={String(p.voice_id)}
+                    isDownloaded={downloadedVoiceIds.has(String(p.voice_id))}
+                    downloadingVoiceId={downloadingVoiceId}
+                    onDownload={(id) => downloadVoice(id)}
+                    onTogglePlay={(id) => togglePlay(id)}
+                    isPlaying={playingVoiceId === String(p.voice_id)}
+                    isPaused={isPaused}
+                    stopPropagation
+                    size="small"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
