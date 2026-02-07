@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, LockKeyhole, Volume2, Settings, History, Plus, Gamepad2, Home, Dot } from 'lucide-react';
+import { Users, LockKeyhole, Volume2, Settings, History, Plus, Gamepad2, Home, Dot, Package } from 'lucide-react';
 import clsx from 'clsx';
 import { useActiveUser } from '../state/ActiveUserContext';
 import { useEffect, useState } from 'react';
@@ -38,8 +38,8 @@ const NavItem = ({
         "flex items-center transition-colors hover:bg-gray-100",
         iconOnly ? "justify-center w-full h-10 rounded-2xl" : "gap-3 px-4 py-3",
         isActive
-          ? "bg-gray-100 text-black"
-          : "bg-white",
+          ? "bg-[var(--color-retro-accent-light)]"
+          : "bg-transparent",
         className
       )}
       aria-label={label}
@@ -104,10 +104,10 @@ export const Sidebar = () => {
 
   return (
     <div className="w-64 shrink-0 bg-transparent p-6 flex flex-col gap-6 h-full overflow-y-auto overscroll-contain justify-between">
-      <div className="bg-white rounded-[24px] overflow-hidden shadow-[0_12px_28px_rgba(0,0,0,0.08)] border border-gray-200">
-        <div className="p-4 pb-2 bg-white text-black flex flex-col items-center">
+      <div className="retro-card rounded-[24px] overflow-hidden">
+        <div className="p-4 pb-2 flex flex-col items-center">
           <Logo />
-          <p className="text-xs font-mono opacity-90">Epic Local AI Toys</p>
+          <p className="text-xs font-mono opacity-90">KEERO</p>
         </div>
         <div className="bg-transparent border-gray-200">
           <nav className="flex flex-col">
@@ -131,6 +131,7 @@ export const Sidebar = () => {
               label="Home"
               matchPath="/"
             />
+            <NavItem to="/packs" icon={Package} label="Packs" />
             <NavItem to="/voices" icon={Volume2} label="Voices" />
             <div className="grid grid-cols-3 gap-2 px-3 pb-3 w-full mt-3">
               <NavItem
@@ -153,7 +154,7 @@ export const Sidebar = () => {
           rel="noreferrer"
           className="inline-flex w-fit opacity-70 hover:opacity-100 hover:scale-105 transition-all hover:-rotate-3 duration-300 ease-in-out"
         >
-          <img src={elatoPng} alt="Pixm8" className="w-18 h-auto object-contain" />
+          <img src={elatoPng} alt="Keero" className="w-18 h-auto object-contain" />
         </a>
         <div className="flex items-center" style={{ fontSize: '10px'}}>
         <a

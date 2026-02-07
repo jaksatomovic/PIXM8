@@ -35,7 +35,7 @@ export const ChatSplitAvatar = ({
 
   return (
     <div
-      className={`relative rounded-[14px] overflow-hidden bg-white shadow-[0_6px_16px_rgba(0,0,0,0.12)] ${className}`}
+      className={`relative rounded-[14px] overflow-hidden retro-card ${className}`}
       style={{
         width: computedWidth,
         height: computedHeight,
@@ -61,7 +61,7 @@ export const ChatSplitAvatar = ({
             onError={() => setImgError(true)}
           />
         ) : (
-          <div className="w-full h-full bg-[#9b5cff]" />
+          <div className="w-full h-full" style={{ backgroundColor: 'var(--color-retro-accent)' }} />
         )}
         {onCharacterClick && (
           <button

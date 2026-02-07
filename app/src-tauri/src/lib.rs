@@ -3,6 +3,9 @@ mod models;
 mod paths;
 mod python_setup;
 mod setup;
+mod voices;
+
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -10,6 +13,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             backend::setup_backend(app)?;
+            let min_size = Some(tauri::LogicalSize::<f64> { width: 800.0, height: 600.0 });
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_min_size(min_size);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -22,7 +29,8 @@ pub fn run() {
             models::download_all_models,
             setup::mark_setup_complete,
             setup::is_first_launch,
-            backend::start_backend
+            backend::start_backend,
+            voices::save_voice_wav_base64
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

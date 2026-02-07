@@ -6,10 +6,15 @@ import json
 import logging
 import os
 import socket
-import time
 import sys
+import time
 import uuid
+import warnings
 from contextlib import asynccontextmanager
+
+# Suppress leaked semaphore warning at shutdown (from multiprocessing/MLX/numpy deps)
+warnings.filterwarnings("ignore", message=r".*leaked semaphore.*", category=UserWarning)
+warnings.filterwarnings("ignore", message=r".*leaked semaphore.*", category=ResourceWarning)
 from pathlib import Path
 from typing import Dict, List, Optional
 import re
@@ -44,6 +49,13 @@ from services import (
     resolve_voice_ref_audio_path,
     run_firmware_flash,
     sanitize_spoken_text,
+)
+from services.addons import (
+    get_addon_catalog,
+    install_addon_from_zip,
+    install_addon_from_url,
+    list_installed_addons,
+    uninstall_addon,
 )
 
 # Client type constants
@@ -141,7 +153,7 @@ async def lifespan(app: FastAPI):
             return
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        msg = f"PIXM8_SERVER {ip} {server_port}".encode("utf-8")
+        msg = f"KEERO_SERVER {ip} {server_port}".encode("utf-8")
         while True:
             try:
                 sock.sendto(msg, ("255.255.255.255", 1900))
@@ -189,9 +201,17 @@ async def lifespan(app: FastAPI):
         streaming_interval=app.state.streaming_interval,
         output_sample_rate=app.state.output_sample_rate,
     )
-    await pipeline.init_models()
-    logger.info("Voice pipeline initialized")
-    app.state.pipeline_ready = True
+
+    async def init_pipeline_background():
+        try:
+            await pipeline.init_models()
+            logger.info("Voice pipeline initialized")
+            app.state.pipeline_ready = True
+        except Exception as e:
+            logger.exception("Voice pipeline init failed: %s", e)
+
+    # Start accepting HTTP requests immediately; load pipeline in background
+    asyncio.create_task(init_pipeline_background())
     yield
     logger.info("Shutting down...")
     mdns_service.stop()
@@ -767,7 +787,7 @@ async def create_voice(body: VoiceCreate):
 
 
 def _app_data_dir() -> Path:
-    db_path = os.environ.get("PIXM8_DB_PATH")
+    db_path = os.environ.get("KEERO_DB_PATH")
     if db_path:
         return Path(db_path).expanduser().resolve().parent
     try:
@@ -779,11 +799,11 @@ def _app_data_dir() -> Path:
 
 
 def _voices_dir() -> Path:
-    return Path(os.environ.get("PIXM8_VOICES_DIR") or _app_data_dir().joinpath("voices"))
+    return Path(os.environ.get("KEERO_VOICES_DIR") or _app_data_dir().joinpath("voices"))
 
 
 def _images_dir() -> Path:
-    return Path(os.environ.get("PIXM8_IMAGES_DIR") or _app_data_dir().joinpath("images"))
+    return Path(os.environ.get("KEERO_IMAGES_DIR") or _app_data_dir().joinpath("images"))
 
 
 class VoiceDownloadRequest(BaseModel):
@@ -799,11 +819,11 @@ async def download_voice_asset(body: VoiceDownloadRequest):
     print('downloading voice', voice_id)
 
     base_url = os.environ.get(
-        "PIXM8_VOICE_BASE_URL",
+        "KEERO_VOICE_BASE_URL",
         "https://pub-6b92949063b142d59fc3478c56ec196c.r2.dev",
     ).rstrip("/")
     url = f"{base_url}/{urllib.parse.quote(voice_id)}.wav"
-    timeout_s = float(os.environ.get("PIXM8_VOICE_TIMEOUT_S", "10"))
+    timeout_s = float(os.environ.get("KEERO_VOICE_TIMEOUT_S", "10"))
     try:
         out_dir = _voices_dir()
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -814,7 +834,7 @@ async def download_voice_asset(body: VoiceDownloadRequest):
             try:
                 start = time.monotonic()
                 bytes_written = 0
-                use_proxy = os.environ.get("PIXM8_VOICE_USE_PROXY", "0") == "1"
+                use_proxy = os.environ.get("KEERO_VOICE_USE_PROXY", "0") == "1"
                 opener = (
                     urllib.request.build_opener()
                     if use_proxy
@@ -823,7 +843,7 @@ async def download_voice_asset(body: VoiceDownloadRequest):
                 req = urllib.request.Request(
                     url,
                     headers={
-                        "User-Agent": "Pixm8/1.0",
+                        "User-Agent": "Keero/1.0",
                         "Accept": "audio/wav,application/octet-stream;q=0.9,*/*;q=0.8",
                         "Accept-Encoding": "identity",
                     },
@@ -994,7 +1014,7 @@ async def update_user(user_id: str, body: Dict[str, Any]):
     """Update a user."""
     user = db_service.db_service.update_user(user_id, **body)
     if not user:
-        return {"error": "User not found"}, 404
+        raise HTTPException(status_code=404, detail="User not found")
     return {"id": user.id, "name": user.name}
 
 # --- Experiences CRUD (personalities, games, stories) ---
@@ -1017,10 +1037,10 @@ def _experience_to_dict(p):
 
 @app.get("/experiences")
 async def get_experiences(include_hidden: bool = False, type: Optional[str] = None):
-    """Get all experiences (personalities, games, stories)."""
+    """Get all experiences (personalities, games, stories, and any future type)."""
     experiences = db_service.db_service.get_experiences(
         include_hidden=include_hidden,
-        experience_type=type if type in ("personality", "game", "story") else None,
+        experience_type=type,
     )
     return [_experience_to_dict(p) for p in experiences]
 
@@ -1218,6 +1238,102 @@ async def get_sessions(limit: int = 50, offset: int = 0, user_id: Optional[str] 
         }
         for s in sessions
     ]
+
+# --- Addons ---
+
+from fastapi import UploadFile, File
+
+@app.post("/addons/install")
+async def install_addon(file: UploadFile = File(...)):
+    """Install an addon from a zip file upload."""
+    try:
+        # Save uploaded file temporarily
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
+            content = await file.read()
+            tmp_file.write(content)
+            tmp_path = Path(tmp_file.name)
+        
+        try:
+            result = install_addon_from_zip(tmp_path)
+            return result
+        finally:
+            # Clean up temp file
+            if tmp_path.exists():
+                tmp_path.unlink()
+    except Exception as e:
+        logger.error(f"Addon installation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/addons/list")
+async def list_addons_endpoint():
+    """List all installed addons from DB with experience and voice counts."""
+    try:
+        addons = list_installed_addons()
+        return {"addons": addons}
+    except Exception as e:
+        logger.error(f"Failed to list addons: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/addons/set_enabled")
+async def set_addon_enabled_endpoint(body: Dict[str, Any]):
+    """Enable or disable an addon by ID."""
+    addon_id = body.get("addon_id")
+    if not addon_id:
+        raise HTTPException(status_code=400, detail="addon_id is required")
+    is_enabled = body.get("is_enabled", True)
+    try:
+        updated = db_service.db_service.set_addon_enabled(addon_id, bool(is_enabled))
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Addon '{addon_id}' not found")
+        return {"addon_id": addon_id, "is_enabled": updated.is_enabled}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Set addon enabled failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/addons/catalog")
+async def get_addon_catalog_endpoint():
+    """Return addon catalog from ELATO_ADDON_CATALOG_URL (cached 5 min)."""
+    try:
+        catalog = get_addon_catalog()
+        return {"catalog": catalog}
+    except Exception as e:
+        logger.error(f"Failed to fetch catalog: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/addons/install_from_url")
+async def install_addon_from_url_endpoint(body: Dict[str, str]):
+    """Install an addon from a zip URL (HTTPS only)."""
+    url = body.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="url is required")
+    try:
+        result = install_addon_from_url(url)
+        return result
+    except Exception as e:
+        logger.error(f"Addon install from URL failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/addons/uninstall")
+async def uninstall_addon_endpoint(body: Dict[str, str]):
+    """Uninstall an addon by ID."""
+    addon_id = body.get("addon_id")
+    if not addon_id:
+        raise HTTPException(status_code=400, detail="addon_id is required")
+    try:
+        result = uninstall_addon(addon_id)
+        return result
+    except Exception as e:
+        logger.error(f"Addon uninstallation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Shutdown ---
 

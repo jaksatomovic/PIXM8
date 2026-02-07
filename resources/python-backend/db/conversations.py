@@ -5,21 +5,41 @@ from typing import List, Optional
 from .models import Conversation
 
 
+def _col(row, key: str, default=None):
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
 class ConversationsMixin:
     def log_conversation(
-        self, role: str, transcript: str, session_id: Optional[str] = None
+        self,
+        role: str,
+        transcript: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        experience_id: Optional[str] = None,
     ) -> Conversation:
         c_id = str(uuid.uuid4())
         timestamp = time.time()
         conn = self._get_conn()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO conversations (id, role, transcript, timestamp, session_id) VALUES (?, ?, ?, ?, ?)",
-            (c_id, role, transcript, timestamp, session_id),
+            "INSERT INTO conversations (id, role, transcript, timestamp, session_id, user_id, experience_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (c_id, role, transcript, timestamp, session_id, user_id, experience_id),
         )
         conn.commit()
         conn.close()
-        return Conversation(c_id, role, transcript, timestamp, session_id)
+        return Conversation(
+            id=c_id,
+            role=role,
+            transcript=transcript,
+            timestamp=timestamp,
+            session_id=session_id,
+            user_id=user_id,
+            experience_id=experience_id,
+        )
 
     def get_conversations(
         self,
@@ -47,7 +67,9 @@ class ConversationsMixin:
                 role=row["role"],
                 transcript=row["transcript"],
                 timestamp=row["timestamp"],
-                session_id=row["session_id"],
+                session_id=_col(row, "session_id"),
+                user_id=_col(row, "user_id"),
+                experience_id=_col(row, "experience_id"),
             )
             for row in rows
         ]

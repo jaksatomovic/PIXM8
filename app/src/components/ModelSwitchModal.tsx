@@ -27,15 +27,15 @@ export const ModelSwitchModal = ({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-[var(--color-retro-bg)] border-4 border-black rounded-2xl p-8 max-w-md w-full mx-4 retro-shadow">
+      <div className="retro-card rounded-2xl p-8 max-w-md w-full mx-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 bg-purple-100 rounded-xl border-2 border-black">
-            <Brain className="w-6 h-6 text-purple-600" />
+          <div className="p-3 bg-[var(--color-retro-accent-light)] rounded-xl border border-[var(--color-retro-border-light)]">
+            <Brain className="w-6 h-6" style={{ color: 'var(--color-retro-accent)' }} />
           </div>
           <div>
             <h2 className="text-xl font-black uppercase tracking-wide">Switching Model</h2>
-            <p className="text-xs text-gray-500 font-mono">Please wait, do not close the app</p>
+            <p className="text-xs text-[var(--color-retro-fg-secondary)] font-mono">Please wait, do not close the app</p>
           </div>
         </div>
 
@@ -71,19 +71,20 @@ export const ModelSwitchModal = ({
 
           {/* Progress bar */}
           {(stage === "downloading" || stage === "loading") && (
-            <div className="w-full bg-gray-200 rounded-full h-4 border-2 border-black overflow-hidden">
+            <div className="w-full bg-[var(--color-retro-border)] rounded-full h-4 border border-[var(--color-retro-border-light)] overflow-hidden">
               <div
-                className={`h-full transition-all duration-300 ${
-                  stage === "downloading" ? "bg-blue-500" : "bg-purple-500"
-                }`}
-                style={{ width: `${Math.min(100, progress * 100)}%` }}
+                className="h-full transition-all duration-300"
+                style={{ 
+                  width: `${Math.min(100, progress * 100)}%`,
+                  backgroundColor: 'var(--color-retro-accent)'
+                }}
               />
             </div>
           )}
 
           {/* Message */}
-          <div className="bg-white border-2 border-black rounded-xl p-4">
-            <p className="font-mono text-sm text-gray-700">
+          <div className="retro-card rounded-xl p-4">
+            <p className="font-mono text-sm" style={{ color: 'var(--color-retro-fg)' }}>
               {error || message || "Processing..."}
             </p>
           </div>
@@ -102,7 +103,7 @@ export const ModelSwitchModal = ({
             {stage === "error" && onRetry && (
               <button
                 onClick={onRetry}
-                className="retro-btn flex-1 bg-purple-500 text-white"
+                className="retro-btn flex-1"
               >
                 Retry
               </button>
@@ -121,7 +122,7 @@ export const ModelSwitchModal = ({
         {/* Warning */}
         {!canClose && (
           <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500 font-mono">
+            <p className="text-xs text-[var(--color-retro-fg-secondary)] font-mono">
               ⚠️ Do not close this window or the app
             </p>
           </div>

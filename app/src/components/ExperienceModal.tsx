@@ -4,7 +4,7 @@ import { Modal } from "./Modal";
 import { ArrowUp } from "lucide-react";
 import logoPng from '../assets/logo.png';
 
-type ExperienceType = 'personality' | 'game' | 'story';
+type ExperienceType = 'personality' | 'game' | 'story' | 'packs';
 
 export type ExperienceForModal = {
   id: string;
@@ -27,7 +27,7 @@ type ExperienceModalProps = {
   onSuccess: () => Promise<void> | void;
 };
 
-const TYPE_LABELS: Record<ExperienceType, { singular: string; placeholder: string }> = {
+const TYPE_LABELS: Record<'personality' | 'game' | 'story', { singular: string; placeholder: string }> = {
   personality: {
     singular: 'Character',
     placeholder: "Describe the character you'd like to create...",
@@ -41,6 +41,8 @@ const TYPE_LABELS: Record<ExperienceType, { singular: string; placeholder: strin
     placeholder: "Describe the story experience you'd like to create...",
   },
 };
+
+const DEFAULT_LABELS = { singular: 'Experience', placeholder: "Describe the experience you'd like to create..." };
 
 export function ExperienceModal({
   open,
@@ -65,7 +67,7 @@ export function ExperienceModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const labels = TYPE_LABELS[experienceType];
+  const labels = (TYPE_LABELS as Record<string, { singular: string; placeholder: string }>)[experienceType] ?? DEFAULT_LABELS;
 
   const reset = () => {
     setDescription("");
@@ -200,7 +202,7 @@ export function ExperienceModal({
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder={labels.placeholder}
-                    className="w-full min-h-[120px] p-4 pr-14 rounded-[20px] border-2 border-black resize-none text-lg bg-white focus:outline-none shadow-inner placeholder:text-gray-500"
+                    className="retro-input w-full min-h-[120px] p-4 pr-14 rounded-[20px] resize-none text-lg focus:outline-none"
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
@@ -211,7 +213,7 @@ export function ExperienceModal({
                 <button 
                     onClick={submitCreate}
                     disabled={submitting || !description.trim()}
-                    className={`absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${(!submitting && !!description.trim()) ? 'cursor-pointer bg-[#9b5cff] text-white border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:brightness-105 hover:scale-[1.03] hover:-translate-x-px hover:-translate-y-px hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:scale-[0.98] active:translate-x-0 active:translate-y-0 active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 focus-visible:ring-offset-white' : 'bg-gray-200 text-gray-700 border-transparent hover:border-black'}`}
+                    className={`absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed ${(!submitting && !!description.trim()) ? 'cursor-pointer retro-btn' : 'bg-[var(--color-retro-border)] text-[var(--color-retro-fg-muted)] border border-[var(--color-retro-border)]'}`}
                 >
                     {submitting ? (
                         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />

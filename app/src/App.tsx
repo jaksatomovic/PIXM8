@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Layout } from "./components/Layout";
 import { Playground } from "./pages/Playground";
+import { PacksPage } from "./pages/PacksPage";
 import { UsersPage } from "./pages/Users";
 import { Conversations } from "./pages/Conversations";
 import { Settings } from "./pages/Settings";
@@ -56,7 +57,7 @@ function SetupGate() {
             return;
           }
         } catch {
-          if (!cancelled) setStartupMsg(STARTUP_DEFAULT_MESSAGE);
+          if (!cancelled) setStartupMsg("Connecting to backend...");
         }
         await new Promise((r) => setTimeout(r, 500));
       }
@@ -112,6 +113,7 @@ function App() {
           <Route path="/" element={<SetupGate />}>
             <Route index element={<Playground />} />
             <Route path="playground" element={<Playground />} />
+            <Route path="packs" element={<PacksPage />} />
             <Route path="voices" element={<VoicesPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="conversations" element={<Conversations />} />

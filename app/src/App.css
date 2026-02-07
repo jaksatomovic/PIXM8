@@ -1,27 +1,57 @@
 @import "tailwindcss";
 
 :root {
-  --color-retro-bg: #ffffff;
-  --color-retro-fg: #111827;
-  --color-retro-accent: #CF79FF;
-  --color-retro-border: #000000;
-  --color-retro-card: #ffffff;
-  --color-retro-yellow: #ffd400;
-  --color-retro-green: #00c853;
-  --color-retro-green-hover: #00b448;
-  --color-retro-blue: #6BC5E8;
-  --radius-retro: 24px;
-  --radius-retro-sm: 18px;
+  /* Background colors */
+  --color-retro-bg: #F7F8FA;
+  --color-retro-card: #FFFFFF;
+  --color-retro-card-hover: #FAFBFC;
   
-  --shadow-retro: 0 10px 24px rgba(0, 0, 0, 0.12);
-  --shadow-retro-sm: 0 6px 14px rgba(0, 0, 0, 0.08);
+  /* Text colors */
+  --color-retro-fg: #1A1D24;
+  --color-retro-fg-secondary: #6B7280;
+  --color-retro-fg-muted: #9AA0AA;
+  
+  /* Accent colors - soft modern pastel */
+  --color-retro-accent: #7C8DFF;
+  --color-retro-accent-hover: #8A9AFF;
+  --color-retro-accent-light: rgba(124, 141, 255, 0.1);
+  --color-retro-secondary: #9EE6CF;
+  --color-retro-warning: #F4C095;
+  --color-retro-error: #E57373;
+  
+  /* Legacy colors for compatibility (softer versions) */
+  --color-retro-yellow: #F4C095;
+  --color-retro-green: #9EE6CF;
+  --color-retro-green-hover: #8DD9C0;
+  --color-retro-blue: #7C8DFF;
+  
+  /* Borders */
+  --color-retro-border: rgba(0, 0, 0, 0.08);
+  --color-retro-border-light: rgba(124, 141, 255, 0.2);
+  
+  /* Radius */
+  --radius-retro: 20px;
+  --radius-retro-sm: 14px;
+  
+  /* Shadows - softer and more subtle */
+  --shadow-retro: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-retro-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-retro-hover: 0 6px 20px rgba(0, 0, 0, 0.1);
+  --shadow-button: 0 2px 8px rgba(124, 141, 255, 0.25);
 }
 
 @layer base {
   body {
     background-color: var(--color-retro-bg);
-    color: #111827;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    color: var(--color-retro-fg);
+    font-family: "Grandstander", ui-monospace, sans-serif;
+    font-weight: 400;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Grandstander", ui-monospace, sans-serif;
+    font-weight: 400;
+    color: var(--color-retro-fg);
   }
 }
 
@@ -61,34 +91,34 @@
 
   .retro-shadow {
     box-shadow: var(--shadow-retro);
-    border: 1px solid #000000;
+    border: 1px solid var(--color-retro-border);
     border-radius: var(--radius-retro);
   }
 
   .retro-shadow-sm {
     box-shadow: var(--shadow-retro-sm);
-    border: 1px solid #000000;
+    border: 1px solid var(--color-retro-border);
     border-radius: var(--radius-retro-sm);
   }
 
   .retro-card.retro-selected {
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 0 0 2px var(--color-retro-accent), var(--shadow-retro-sm);
+    border: 1px solid var(--color-retro-accent);
+    box-shadow: 0 0 0 3px var(--color-retro-accent-light), var(--shadow-retro-sm);
   }
 
   .retro-card.retro-not-selected {
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--color-retro-border);
     box-shadow: var(--shadow-retro-sm);
   }
 
   .retro-dots {
-    background-image: radial-gradient(rgba(0, 0, 0, 0.14) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
     background-size: 18px 18px;
     background-position: -1px -1px;
   }
 
   .brand-font {
-    font-family: "Luckiest Guy", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: "Grandstander", ui-monospace, sans-serif;
     letter-spacing: 0.08em;
   }
 
@@ -98,47 +128,51 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.6rem 1.5rem;
-    background-color: var(--color-retro-yellow);
-    color: #111827;
-    font-weight: 900;
-    /* text-transform: uppercase; */
+    padding: 0.65rem 1.6rem;
+    background-color: var(--color-retro-accent);
+    color: white;
+    font-family: "Grandstander", ui-monospace, sans-serif;
+    font-weight: 400;
+    font-size: 1rem;
     letter-spacing: 0.04em;
-    border: none;
-    border-radius: 16px;
-    box-shadow: 0 6px 0 var(--shadow-color, #c58a00);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    text-transform: uppercase;
+    border: 2px solid rgba(0, 0, 0, 0.12);
+    border-radius: 12px;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15), var(--shadow-button);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
     cursor: pointer;
   }
 
   .retro-btn-sm {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.75rem;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.85rem;
   }
 
   .retro-btn-purple {
     background-color: var(--color-retro-accent);
     color: white;
-    --shadow-color: #7a35a6;
+    border: 2px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15), var(--shadow-button);
   }
 
   .retro-btn-green {
     background-color: var(--color-retro-green);
-    color: white;
-    --shadow-color: var(--color-retro-green-hover);
+    color: var(--color-retro-fg);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12), 0 2px 8px rgba(158, 230, 207, 0.3);
   }
 
   .retro-btn-outline {
-    background-color: white;
-    color: #111827;
-    border: 2px solid #f3f4f6;
-    box-shadow: 0 6px 0 #d1d5db;
+    background-color: transparent;
+    color: var(--color-retro-fg);
+    border: 2px solid var(--color-retro-border-light);
+    box-shadow: none;
   }
 
 
   .retro-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 0 var(--shadow-color, #c58a00);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 0 rgba(0, 0, 0, 0.15), 0 6px 14px rgba(124, 141, 255, 0.35);
   }
 
   .retro-btn:disabled,
@@ -155,60 +189,74 @@
 
 
   .retro-btn-outline:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 0 #aaa;
+    background-color: var(--color-retro-accent-light);
+    border-color: var(--color-retro-accent);
+    transform: translateY(-1px);
   }
 
   .retro-btn.no-lift:hover {
     transform: none;
-    box-shadow: 0 6px 0 var(--shadow-color, #c58a00);
   }
 
 
 .retro-btn-outline.no-lift:hover {
   transform: none;
-  box-shadow: 0 6px 0 #d1d5db;
+  background-color: var(--color-retro-accent-light);
 }
 
   .retro-btn-dangerous-outline {
-    background-color: #fff1f2;
-    color: #9f1239;
-    border: 2px solid #fecdd3;
-    box-shadow: 0 6px 0 #fda4af;
+    background-color: rgba(229, 115, 115, 0.1);
+    color: var(--color-retro-error);
+    border: 1px solid rgba(229, 115, 115, 0.3);
+    box-shadow: none;
   }
 
   .retro-btn-dangerous-outline:hover {
-    filter: brightness(0.98);
+    background-color: rgba(229, 115, 115, 0.15);
+    border-color: var(--color-retro-error);
+    transform: translateY(-1px);
   }
 
   .retro-btn-dangerous-outline:active {
-    filter: brightness(0.95);
+    transform: translateY(0);
   }
 
   .retro-btn:active {
-    transform: translateY(6px);
-    box-shadow: none;
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15), var(--shadow-button);
   }
 
   .retro-input {
     width: 100%;
     padding: 0.5rem 1rem;
-    background-color: white;
-    border: 1px solid black;
+    background-color: var(--color-retro-card);
+    border: 1px solid var(--color-retro-border-light);
     box-shadow: none;
     border-radius: var(--radius-retro-sm);
     outline: none;
+    color: var(--color-retro-fg);
+    transition: all 0.2s ease;
   }
   .retro-input:focus {
     outline: none;
+    border-color: var(--color-retro-accent);
+    box-shadow: 0 0 0 3px rgba(124, 141, 255, 0.1);
+  }
+  .retro-input::placeholder {
+    color: var(--color-retro-fg-muted);
   }
 
   .retro-card {
-    background-color: white;
+    background-color: var(--color-retro-card);
     padding: 1.5rem;
-    /* border: 1px solid black; */
+    border: 1px solid var(--color-retro-border);
     box-shadow: var(--shadow-retro-sm);
     border-radius: var(--radius-retro);
+    transition: all 0.2s ease;
+  }
+  
+  .retro-card:hover {
+    box-shadow: var(--shadow-retro-hover);
   }
 
    .retro-card-no-padding {
@@ -220,7 +268,7 @@
   .retro-card-outline {
     background-color: transparent;
     padding: 1.5rem;
-    border: 1px solid black;
+    border: 1px solid var(--color-retro-border);
     box-shadow: none;
     border-radius: var(--radius-retro);
   }
@@ -231,28 +279,30 @@
     justify-content: center;
     width: 34px;
     height: 34px;
-    border-radius: 12px;
+    border-radius: 10px;
     border: none;
     background: transparent;
     box-shadow: none;
-    transition: transform 0.12s, box-shadow 0.12s;
+    transition: all 0.2s ease;
+    color: var(--color-retro-fg-secondary);
   }
   .retro-icon-btn:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--color-retro-accent-light);
+    color: var(--color-retro-accent);
   }
   .retro-icon-btn:active {
-    transform: none;
-    box-shadow: none;
+    transform: scale(0.95);
   }
 
   .retro-range {
     -webkit-appearance: none;
     appearance: none;
-    border: 1px solid black;
+    border: none;
+    background: transparent;
   }
   .retro-range::-webkit-slider-runnable-track {
-    height: 8px;
-    background: transparent;
+    height: 6px;
+    background: var(--color-retro-border);
     border-radius: 9999px;
   }
   .retro-range::-webkit-slider-thumb {
@@ -261,20 +311,52 @@
     width: 18px;
     height: 18px;
     border-radius: 9999px;
-    background: white;
-    border: 1px solid black;
-    margin-top: -5px;
+    background: var(--color-retro-accent);
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-top: -6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .retro-range::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(124, 141, 255, 0.4);
   }
   .retro-range::-moz-range-track {
-    height: 8px;
-    background: transparent;
+    height: 6px;
+    background: var(--color-retro-border);
     border-radius: 9999px;
+    border: none;
   }
   .retro-range::-moz-range-thumb {
     width: 18px;
     height: 18px;
     border-radius: 9999px;
     background: var(--color-retro-accent);
-    border: 2px solid black;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .retro-range::-moz-range-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(124, 141, 255, 0.4);
+  }
+
+  /* Checkbox styling */
+  input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-retro-accent);
+    cursor: pointer;
+  }
+
+  /* Select dropdown styling */
+  select.retro-input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem;
+    appearance: none;
   }
 }

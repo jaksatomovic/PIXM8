@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from .base import BaseDB
+from .addons import AddonsMixin
 from .conversations import ConversationsMixin
 from .devices import DeviceMixin
 from .paths import resolve_db_path
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class DBService(
     BaseDB,
+    AddonsMixin,
     SettingsMixin,
     DeviceMixin,
     VoicesMixin,

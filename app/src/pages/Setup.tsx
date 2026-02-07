@@ -117,7 +117,7 @@ export const SetupPage = () => {
     <div className="min-h-screen bg-[var(--color-retro-bg)] flex items-center justify-center p-8">
       <div className="max-w-lg w-full">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-black mb-2 tracking-wider brand-font">EPIC LOCAL AI TOYS</h1>
+          <h1 className="text-4xl font-black mb-2 tracking-wider brand-font">KEERO</h1>
           <p className="text-gray-600 font-mono">Let's set up your local AI engine</p>
         </div>
 

@@ -109,7 +109,7 @@ This firmware turns your Seed Studio XIAO ESP32-S3 (or general ESP32 WROOM Dev m
         ```cpp
         const char *websocket_server_host = "<your-server-host>"; // this is your WiFi I.P. Address
         const uint16_t websocket_server_port = 8000;
-        const char *websocket_server_path = "/Pixm8";
+        const char *websocket_server_path = "/KEERO";
         ```
 
 6. Build the project:
@@ -129,7 +129,7 @@ This firmware turns your Seed Studio XIAO ESP32-S3 (or general ESP32 WROOM Dev m
 9. Connect to WiFi using the WiFi Captive portal
     - It is straightforward to connect to your local Wifi network with an SSID (WiFi name) and Password.
     - Once the device is on, it acts as an Access Point to connect to a known WiFi network.
-    - Find the device name "Pixm8 device" in your list of local wifi networks.
+    - Find the device name "KEERO device" in your list of local wifi networks.
     - Press "Configure Wifi" and type in your SSID and PW for your Wifi and connect.
     - The Seeed Stuido XIAO ESP32S3 should then automatically connect to your Wifi and save your Wifi details.
 

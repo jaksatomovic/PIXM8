@@ -2,25 +2,36 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager};
 
-pub(crate) fn get_pixm8_dir(app: &AppHandle) -> PathBuf {
+pub(crate) fn get_keero_dir(app: &AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()
         .expect("Failed to resolve app data directory")
 }
 
 pub(crate) fn get_voices_dir(app: &AppHandle) -> PathBuf {
-    get_pixm8_dir(app).join("voices")
+    get_keero_dir(app).join("voices")
 }
 
 pub(crate) fn get_images_dir(app: &AppHandle) -> PathBuf {
-    get_pixm8_dir(app).join("images")
+    get_keero_dir(app).join("images")
 }
 
 pub(crate) fn get_venv_path(app: &AppHandle) -> PathBuf {
-    get_pixm8_dir(app).join("python_env")
+    get_keero_dir(app).join("python_env")
 }
 
 pub(crate) fn get_bootstrap_python_root(app: &AppHandle) -> PathBuf {
+    // Dev fallback: same as backend.rs / python_setup.rs — repo_root/resources/python_runtime
+    if let Some(root) = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+    {
+        let dev_runtime = root.join("resources").join("python_runtime");
+        if dev_runtime.exists() {
+            return dev_runtime;
+        }
+    }
+
     let resource_dir = app
         .path()
         .resource_dir()

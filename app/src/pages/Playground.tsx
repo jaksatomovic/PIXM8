@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { Image as ImageIcon, Pencil, Trash2, MessageCircle, BookOpen, Maximize2, Gamepad2 } from 'lucide-react';
+import { Image as ImageIcon, Pencil, Trash2, MessageCircle, Maximize2, Gamepad2, Package } from 'lucide-react';
 import { useActiveUser } from '../state/ActiveUserContext';
 import { ExperienceModal, ExperienceForModal } from '../components/ExperienceModal';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -8,18 +8,22 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { VoiceActionButtons } from '../components/VoiceActionButtons';
 import { useVoicePlayback } from '../hooks/useVoicePlayback';
 import { Modal } from '../components/Modal';
+import { PacksPage } from './PacksPage';
 
-type ExperienceType = 'personality' | 'game' | 'story';
+type ExperienceType = 'personality' | 'game' | 'story' | 'packs';
 
 const TAB_CONFIG: { id: ExperienceType; label: string; icon: typeof MessageCircle }[] = [
-  { id: 'story', label: 'Stories', icon: BookOpen },
+  { id: 'packs', label: 'Packs', icon: Package },
   { id: 'game', label: 'Games', icon: Gamepad2 },
   { id: 'personality', label: 'Chat', icon: MessageCircle },
 ];
 
+const VALID_TABS: ExperienceType[] = ['personality', 'game', 'packs'];
+
 export const Playground = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = (searchParams.get('tab') as ExperienceType) || 'personality';
+  const tabParam = (searchParams.get('tab') as ExperienceType) || 'personality';
+  const initialTab = VALID_TABS.includes(tabParam) ? tabParam : 'personality';
   const [activeTab, setActiveTab] = useState<ExperienceType>(initialTab);
   
   const [experiences, setExperiences] = useState<any[]>([]);
@@ -78,9 +82,13 @@ export const Playground = () => {
   };
 
   const load = async () => {
+    if (activeTab === 'packs') {
+      setLoading(false);
+      return;
+    }
     try {
       setError(null);
-      const data = await api.getExperiences(false, activeTab);
+      const data = await api.getExperiences(false, activeTab as 'personality' | 'game' | 'story');
       setExperiences(data);
       setBrokenImgById({});
     } catch (e: any) {
@@ -208,7 +216,7 @@ export const Playground = () => {
 
   const assignToActiveUser = async (experienceId: string) => {
     if (!activeUserId) {
-      setError('Select an active user first');
+      setError('Select a member first: go to Members and click a member to set them active.');
       return;
     }
     try {
@@ -221,7 +229,8 @@ export const Playground = () => {
         // non-blocking
       }
     } catch (e: any) {
-      setError(e?.message || 'Failed to assign experience');
+      const msg = e?.message || '';
+      setError(msg === 'Not Found' ? 'User not found. Try selecting a member in Members first.' : (msg || 'Failed to assign experience'));
     }
   };
 
@@ -277,10 +286,10 @@ export const Playground = () => {
       </div>
 
       <ExperienceModal 
-        open={modalOpen}
+        open={modalOpen && activeTab !== 'packs'}
         mode={modalMode}
         experience={selectedExperience}
-        experienceType={activeTab}
+        experienceType={activeTab === 'packs' ? 'personality' : activeTab}
         onClose={() => setModalOpen(false)}
         onSuccess={async () => {
           await load();
@@ -332,6 +341,15 @@ style={{
         </div>
       </Modal>
 
+      {activeTab === 'packs' ? (
+        <PacksPage />
+      ) : (
+        <>
+      {!activeUserId && !loading && (
+        <div className="retro-card font-mono text-sm mb-4" style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}>
+          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then click a character to start chatting.
+        </div>
+      )}
       {loading && (
         <div className="retro-card font-mono text-sm">Loading…</div>
       )}
@@ -524,6 +542,8 @@ style={{
           </div>
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 };

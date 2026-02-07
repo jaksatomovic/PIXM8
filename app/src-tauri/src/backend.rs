@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
 
-use crate::paths::{get_pixm8_dir, get_images_dir, get_venv_python, get_voices_dir};
+use crate::paths::{get_keero_dir, get_images_dir, get_venv_python, get_voices_dir};
 
 pub struct ApiProcess(pub Mutex<Option<Child>>);
 
@@ -93,9 +93,9 @@ pub async fn start_backend(app: AppHandle) -> Result<String, String> {
         }
     };
 
-    let pixm8_db_path = get_pixm8_dir(&app).join("pixm8.db");
-    let pixm8_voices_dir = get_voices_dir(&app);
-    let pixm8_images_dir = get_images_dir(&app);
+    let keero_db_path = get_keero_dir(&app).join("keero.db");
+    let keero_voices_dir = get_voices_dir(&app);
+    let keero_images_dir = get_images_dir(&app);
 
     ensure_port_free(8000);
 
@@ -108,12 +108,13 @@ pub async fn start_backend(app: AppHandle) -> Result<String, String> {
         .arg("--port")
         .arg("8000")
         .current_dir(&python_dir)
-        .env("PIXM8_DB_PATH", pixm8_db_path.to_string_lossy().to_string())
-        .env("PIXM8_VOICES_DIR", pixm8_voices_dir.to_string_lossy().to_string())
-        .env("PIXM8_IMAGES_DIR", pixm8_images_dir.to_string_lossy().to_string())
+        .env("KEERO_DB_PATH", keero_db_path.to_string_lossy().to_string())
+        .env("KEERO_VOICES_DIR", keero_voices_dir.to_string_lossy().to_string())
+        .env("KEERO_IMAGES_DIR", keero_images_dir.to_string_lossy().to_string())
         .env("TOKENIZERS_PARALLELISM", "false")
         .env("HF_HUB_DISABLE_XET", "1")
         .env("HF_HUB_ENABLE_HF_TRANSFER", "1")
+        .env("PYTHONWARNINGS", "ignore::UserWarning:multiprocessing.resource_tracker")
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
@@ -145,7 +146,7 @@ pub fn setup_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
     };
 
     if !venv_python.exists() {
-        println!("[TAURI] Python env not ready yet. Skipping API server start.");
+        println!("[TAURI] Python env not ready yet (expected: {}). Skipping API server start.", venv_python.display());
         return Ok(());
     }
 
@@ -155,10 +156,10 @@ pub fn setup_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
     println!("[TAURI] Python: {:?}", python_path);
     println!("[TAURI] Server dir: {:?}", python_dir);
 
-    let pixm8_db_path = get_pixm8_dir(&app_handle).join("pixm8.db");
-    let pixm8_voices_dir = get_voices_dir(&app_handle);
-    let pixm8_images_dir = get_images_dir(&app_handle);
-    println!("[TAURI] DB Path: {:?}", pixm8_db_path);
+    let keero_db_path = get_keero_dir(&app_handle).join("keero.db");
+    let keero_voices_dir = get_voices_dir(&app_handle);
+    let keero_images_dir = get_images_dir(&app_handle);
+    println!("[TAURI] DB Path: {:?}", keero_db_path);
 
     let child = Command::new(&python_path)
         .arg("-m")
@@ -169,12 +170,13 @@ pub fn setup_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
         .arg("--port")
         .arg("8000")
         .current_dir(&python_dir)
-        .env("PIXM8_DB_PATH", pixm8_db_path.to_string_lossy().to_string())
-        .env("PIXM8_VOICES_DIR", pixm8_voices_dir.to_string_lossy().to_string())
-        .env("PIXM8_IMAGES_DIR", pixm8_images_dir.to_string_lossy().to_string())
+        .env("KEERO_DB_PATH", keero_db_path.to_string_lossy().to_string())
+        .env("KEERO_VOICES_DIR", keero_voices_dir.to_string_lossy().to_string())
+        .env("KEERO_IMAGES_DIR", keero_images_dir.to_string_lossy().to_string())
         .env("TOKENIZERS_PARALLELISM", "false")
         .env("HF_HUB_DISABLE_XET", "1")
         .env("HF_HUB_ENABLE_HF_TRANSFER", "1")
+        .env("PYTHONWARNINGS", "ignore::UserWarning:multiprocessing.resource_tracker")
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn();

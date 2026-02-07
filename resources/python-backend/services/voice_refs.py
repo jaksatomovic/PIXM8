@@ -6,7 +6,7 @@ from typing import Optional
 def resolve_voice_ref_audio_path(voice_id: Optional[str]) -> Optional[str]:
     if not voice_id:
         return None
-    voices_dir = os.environ.get("PIXM8_VOICES_DIR")
+    voices_dir = os.environ.get("KEERO_VOICES_DIR")
     if not voices_dir:
         return None
     try:

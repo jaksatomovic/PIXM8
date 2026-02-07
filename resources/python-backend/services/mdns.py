@@ -23,12 +23,12 @@ class MdnsService:
             if local_ip.startswith("127."):
                 logger.warning("mDNS using loopback address; discovery will fail")
             self.service_info = ServiceInfo(
-                "_pixm8._tcp.local.",
-                "Pixm8 Voice Server._pixm8._tcp.local.",
+                "_keero._tcp.local.",
+                "Keero Voice Server._keero._tcp.local.",
                 addresses=[socket.inet_aton(local_ip)],
                 port=port,
                 properties={"path": "/ws/esp32"},
-                server="pixm8.local.",
+                server="keero.local.",
             )
             self.zeroconf = Zeroconf()
             self.zeroconf.register_service(self.service_info)

@@ -21,32 +21,32 @@ const TILE_CONFIG: Array<{
     kind: "game",
     label: "Game",
     helper: "Play a game with AI",
-    bgClass: "!bg-yellow-300",
-    shadowColor: "#facc15",
+    bgClass: "!bg-[#F4C095]",
+    shadowColor: "#F4C095",
     Icon: Dices,
   },
   {
     kind: "story",
     label: "Story",
     helper: "Tell a story together",
-    bgClass: "!bg-purple-400",
-    shadowColor: "#a855f7",
+    bgClass: "!bg-[#9EE6CF]",
+    shadowColor: "#9EE6CF",
     Icon: BookOpen,
   },
   {
     kind: "character",
     label: "Character",
     helper: "Chat with any character",
-    bgClass: "!bg-red-400",
-    shadowColor: "#ef4444",
+    bgClass: "!bg-[#7C8DFF]",
+    shadowColor: "#7C8DFF",
     Icon: MessageCircle,
   },
   {
     kind: "voice",
     label: "Voice",
     helper: "Clone a voice",
-    bgClass: "!bg-blue-500",
-    shadowColor: "#2563eb",
+    bgClass: "!bg-[#7C8DFF]",
+    shadowColor: "#7C8DFF",
     Icon: Mic,
   },
 ];
@@ -64,13 +64,16 @@ export const CreateTiles = ({
         <button
           key={kind}
           type="button"
-          className={`retro-btn w-full text-base flex-col gap-2 text-black ${bgClass}`}
-          style={{ ["--shadow-color" as any]: shadowColor }}
+          className={`retro-btn w-full text-base flex-col gap-2 ${bgClass} ${kind === "character" || kind === "voice" ? "text-white" : "text-[#1A1D24]"}`}
+          style={{ 
+            boxShadow: `0 2px 8px ${shadowColor}40`,
+            backgroundColor: shadowColor
+          }}
           onClick={() => onSelect(kind)}
         >
           <Icon size={iconSize} className="shrink-0" />
-          <span className="inline-flex items-center uppercase text-sm gap-2">{label}</span>
-          <span className="text-xs font-medium opacity-80">{helper}</span>
+          <span className="inline-flex items-center text-sm gap-2 font-medium">{label}</span>
+          <span className="text-xs opacity-80">{helper}</span>
         </button>
       ))}
     </div>

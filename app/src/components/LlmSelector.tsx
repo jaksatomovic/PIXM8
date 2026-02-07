@@ -45,7 +45,7 @@ export const LlmSelector = ({ value, onChange, disabled, label = "Model" }: Prop
       ) : null}
       <div className="flex gap-2">
         <select
-          className="retro-input bg-white flex-1"
+          className="retro-input flex-1"
           value={mode === "preset" ? presetMatch?.repo_id || "" : "__custom__"}
           onChange={(e) => {
             const next = e.target.value;
@@ -83,13 +83,13 @@ export const LlmSelector = ({ value, onChange, disabled, label = "Model" }: Prop
             onChange(next);
           }}
           placeholder="e.g. mlx-community/Qwen3-4B-4bit"
-          className="retro-input bg-white w-full"
+          className="retro-input w-full"
           disabled={disabled}
         />
       )}
 
       {selectedInfo && (
-        <div className="text-[10px] font-mono text-gray-500">
+        <div className="text-[10px] font-mono" style={{ color: 'var(--color-retro-fg-secondary)' }}>
           {selectedInfo.params} · {selectedInfo.quantization} · {selectedInfo.specialty}
         </div>
       )}

@@ -41,7 +41,7 @@ export const ChatTranscript = ({
   return (
     <div className={`bg-transparent border-0 shadow-none rounded-none ${className}`}>
       {messages.length === 0 ? (
-        <div className="p-8 text-center font-mono text-gray-500">{emptyLabel}</div>
+        <div className="p-8 text-center font-mono" style={{ color: 'var(--color-retro-fg-secondary)' }}>{emptyLabel}</div>
       ) : (
         <div className="p-4 space-y-3">
           {messages.map((entry) => {
@@ -56,22 +56,25 @@ export const ChatTranscript = ({
               >
                 <div
                   className={`max-w-[78%] rounded-2xl px-4 py-3 ${
-                    isAi ? "bg-[#f0f0f0] text-gray-900" : "bg-purple-400 text-white"
+                    isAi ? "bg-[var(--color-retro-card)]" : "bg-[var(--color-retro-accent)] text-white"
                   }`}
                   style={
                     isAi && isLive
                       ? {
+                          color: 'var(--color-retro-fg)',
                           animation: "aiFadeIn 220ms ease-out",
                           animationFillMode: "both",
                         }
+                      : isAi
+                      ? { color: 'var(--color-retro-fg)' }
                       : undefined
                   }
                 >
-                  <div className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isAi ? "text-gray-600" : "text-white/80"}`}>
+                  <div className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isAi ? "text-[var(--color-retro-fg-secondary)]" : "text-white/80"}`}>
                     {isAi ? "AI" : "You"}
                   </div>
                   <div className="font-medium leading-relaxed whitespace-pre-wrap">{entry.text}</div>
-                  <div className={`mt-2 font-mono text-[10px] text-right ${isAi ? "text-gray-500" : "text-white/80"}`}>
+                  <div className={`mt-2 font-mono text-[10px] text-right ${isAi ? "text-[var(--color-retro-fg-muted)]" : "text-white/80"}`}>
                     {new Date(entry.timestamp).toLocaleString()}
                   </div>
                 </div>

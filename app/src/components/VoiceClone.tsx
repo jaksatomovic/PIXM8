@@ -307,20 +307,20 @@ export const VoiceClone = ({ open, onClose, onCreated }: Props) => {
 
                 <div className="retro-card-outline cursor-pointer flex items-center justify-between gap-3 px-4 py-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-[12px] retro-dotted bg-white flex items-center justify-center shrink-0">
-                      <ImageIcon size={16} className="text-gray-600" />
+                    <div className="w-10 h-10 rounded-[12px] retro-dotted retro-card flex items-center justify-center shrink-0">
+                      <ImageIcon size={16} style={{ color: 'var(--color-retro-fg-secondary)' }} />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold text-sm">{cloneFile ? 'Selected' : 'Choose file'}</div>
-                      <div className="font-mono text-xs text-gray-700 truncate">{chooseLabel}</div>
+                      <div className="font-bold text-sm" style={{ color: 'var(--color-retro-fg)' }}>{cloneFile ? 'Selected' : 'Choose file'}</div>
+                      <div className="font-mono text-xs truncate" style={{ color: 'var(--color-retro-fg-secondary)' }}>{chooseLabel}</div>
                     </div>
                   </div>
                 </div>
               </label>
 
               <div className="relative w-10 self-stretch flex items-center justify-center">
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-l-2 border-gray-300" />
-                <div className="font-mono text-xs font-bold bg-white px-2 py-1">OR</div>
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-l-2 border-[var(--color-retro-border)]" />
+                <div className="font-mono text-xs font-bold retro-card px-2 py-1">OR</div>
               </div>
 
               <div className="shrink-0 flex w-1/2 flex-col gap-3">

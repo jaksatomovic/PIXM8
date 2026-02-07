@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap } from 'lucide-react';
+import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package } from 'lucide-react';
 import { ModelSwitchModal } from '../components/ModelSwitchModal';
 import { LlmSelector } from '../components/LlmSelector';
+import { Addons } from '../components/Addons';
+import { useSearchParams } from 'react-router-dom';
 
 type ModelConfig = {
   llm: {
@@ -14,6 +16,9 @@ type ModelConfig = {
 };
 
 export const Settings = () => {
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get('tab') || 'general';
+  
   const [models, setModels] = useState<ModelConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [llmRepo, setLlmRepo] = useState('');
@@ -161,19 +166,40 @@ export const Settings = () => {
     setPendingModelRepo('');
   };
 
+  if (tab === 'addons') {
+    return <Addons />;
+  }
+
   return (
     <div>
-      <h2 className="text-3xl font-black mb-8 flex items-center gap-3">
-        SETTINGS
-      </h2>
+      <div className="flex items-center justify-between mb-8">
+        <h2 className="text-3xl font-black flex items-center gap-3">
+          SETTINGS
+        </h2>
+        <div className="flex gap-2">
+          <a
+            href="/settings?tab=general"
+            className={`retro-btn retro-btn-outline text-sm ${tab === 'general' || !tab ? 'bg-[var(--color-retro-accent-light)]' : ''}`}
+          >
+            General
+          </a>
+          <a
+            href="/settings?tab=addons"
+            className={`retro-btn retro-btn-outline text-sm flex items-center gap-2 ${tab === 'addons' ? 'bg-[var(--color-retro-accent-light)]' : ''}`}
+          >
+            <Package className="w-4 h-4" />
+            Addons
+          </a>
+        </div>
+      </div>
       
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 font-bold rounded-[12px]">
+        <div className="mb-6 p-4 rounded-[12px] font-bold" style={{ backgroundColor: 'rgba(229, 115, 115, 0.1)', border: '1px solid rgba(229, 115, 115, 0.3)', color: 'var(--color-retro-error)' }}>
           {error}
         </div>
       )}
       
-      <div className="retro-card space-y-8 border border-gray-200 shadow-[0_12px_28px_rgba(0,0,0,0.06)]">
+      <div className="retro-card space-y-8">
         
         {/* LLM Section */}
         <div className="space-y-4">
@@ -186,7 +212,7 @@ export const Settings = () => {
 <button 
                 onClick={handleSaveModel}
                 disabled={showSwitchModal || loading || !llmRepo || llmRepo === models?.llm.repo}
-                className="absolute top-0 right-0 retro-btn retro-btn-outline text-gray-900 disabled:opacity-50 flex items-center gap-2"
+                className="absolute top-0 right-0 retro-btn retro-btn-outline disabled:opacity-50 flex items-center gap-2"
               >
                 <Rss className="w-4 h-4" />
                 Update
@@ -211,15 +237,15 @@ export const Settings = () => {
             </div>
             <p className="text-[10px] mt-2 opacity-60">
               {models?.llm.loaded ? (
-                <span className="text-green-600 font-bold">● System Loaded</span>
+                <span className="font-bold" style={{ color: 'var(--color-retro-green)' }}>● System Loaded</span>
               ) : (
-                <span className="text-red-500 font-bold">● Not Loaded</span>
+                <span className="font-bold" style={{ color: 'var(--color-retro-error)' }}>● Not Loaded</span>
               )}
             </p>
           
         </div>
 
-        <div className="pt-8 border-t border-gray-200">
+          <div className="pt-8 border-t border-[var(--color-retro-border)]">
           <div className="flex items-center gap-2 justify-between">
             <div className="flex flex-col gap-1">
               <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
@@ -234,7 +260,7 @@ export const Settings = () => {
             
               <button
                 type="button"
-                className="retro-btn retro-btn-outline text-gray-900 disabled:opacity-50 flex items-center gap-2"
+                className="retro-btn retro-btn-outline disabled:opacity-50 flex items-center gap-2"
                 onClick={flashFirmware}
                 disabled={!flashEnabled}
               >
@@ -243,7 +269,7 @@ export const Settings = () => {
           </div>
           <div className="mt-5">
             <div className="flex items-center justify-between gap-3 mb-2">
-              <div className="text-xs text-gray-500 uppercase">Serial Port</div>
+              <div className="text-xs uppercase" style={{ color: 'var(--color-retro-fg-secondary)' }}>Serial Port</div>
               <button
                 type="button"
                 className="inline-flex items-center gap-2 text-xs font-bold uppercase opacity-60 hover:opacity-100 disabled:opacity-30"
@@ -257,7 +283,7 @@ export const Settings = () => {
 
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
               <select
-                className="retro-input bg-white border border-gray-200 flex-1"
+                className="retro-input flex-1"
                 value={selectedPort}
                 onChange={(e) => setSelectedPort(e.target.value)}
                 disabled={flashing}
@@ -278,14 +304,14 @@ export const Settings = () => {
 
           <div className="mt-4">
             <div className="text-xs text-gray-500 uppercase mb-2">Output</div>
-            <pre className="bg-white border border-gray-200 rounded-[12px] p-3 text-xs font-mono whitespace-pre-wrap max-h-56 overflow-auto">
+            <pre className="retro-card rounded-[12px] p-3 text-xs font-mono whitespace-pre-wrap max-h-56 overflow-auto">
               {flashLog || '—'}
             </pre>
           </div>
         </div>
 
         {/* Device Status Section */}
-        <div className="pt-8 border-t border-gray-200">
+        <div className="pt-8 border-t border-[var(--color-retro-border)]">
           <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
             <Radio className="w-5 h-5" />
             Device Settings
@@ -322,7 +348,7 @@ export const Settings = () => {
                   setLaptopVolume(vol);
                   api.setSetting('laptop_volume', String(vol)).catch(console.error);
                 }}
-                className="retro-range w-full h-2 bg-white rounded-lg appearance-none cursor-pointer"
+                className="retro-range w-full h-2 rounded-lg appearance-none cursor-pointer"
                 style={{
                   background: `linear-gradient(#9b5cff 0 0) 0/${Math.max(0, Math.min(100, laptopVolume))}% 100% no-repeat, white`,
                 }}

@@ -220,7 +220,7 @@ const LayoutInner = () => {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-(--color-retro-bg)">
       {showNetworkBanner && (
-        <div className="bg-(--color-retro-blue) text-white px-4 py-3 flex items-center justify-between shadow-md z-50 shrink-0 border-b-2 border-black">
+        <div className="bg-[var(--color-retro-accent)] text-white px-4 py-3 flex items-center justify-between shadow-md z-50 shrink-0 border-b border-[var(--color-retro-border)]">
           <div className="font-mono text-sm flex items-center gap-2">
             <RefreshCw size={16} />
             <span>
@@ -255,10 +255,10 @@ const LayoutInner = () => {
         {activeUser?.current_personality_id && (
           <div className="fixed bottom-0 z-20 left-64 right-0 pointer-events-none">
             <div className="max-w-4xl mx-auto px-8 pb-6 pointer-events-auto">
-              <div className="bg-white border border-gray-200 rounded-full px-5 py-4 flex items-center justify-between shadow-xl">
+              <div className="retro-card rounded-full px-5 py-4 flex items-center justify-between">
                 <div className="min-w-0 flex items-center gap-4">
                   {activePersonalityImageSrc && !activePersonalityImageError && (
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-white border border-gray-200">
+                    <div className="w-12 h-12 rounded-full overflow-hidden retro-card border border-[var(--color-retro-border)]">
                       <img
                         src={activePersonalityImageSrc}
                         alt=""
@@ -268,11 +268,11 @@ const LayoutInner = () => {
                     </div>
                   )}
                   <div className="min-w-0">
-                    <div className="font-mono text-xs text-gray-500 flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full border border-gray-300 ${statusDotClass} ${sessionActive ? 'retro-blink' : ''}`} />
+                    <div className="font-mono text-xs text-[var(--color-retro-fg-secondary)] flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full border border-[var(--color-retro-border)] ${statusDotClass} ${sessionActive ? 'retro-blink' : ''}`} />
                       <span className={statusTextClass}>{statusLabel}</span>
                     </div>
-                    <div className="mt-1 font-black text-base text-black truncate">{activePersonalityName || '—'}</div>
+                    <div className="mt-1 font-black text-base truncate" style={{ color: 'var(--color-retro-fg)' }}>{activePersonalityName || '—'}</div>
                   </div>
                 </div>
 

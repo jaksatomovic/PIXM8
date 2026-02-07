@@ -1,6 +1,7 @@
 import sqlite3
 
 ALLOWED_TABLES = {
+    "addons",
     "app_state",
     "conversations",
     "personalities",

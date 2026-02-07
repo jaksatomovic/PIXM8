@@ -154,12 +154,12 @@ export function PersonalityModal({ open, mode, personality, createVoiceId, creat
             {error && <div className="font-mono text-sm text-red-600 mb-2">{error}</div>}
             
             <div className="flex flex-col items-center gap-2 mb-6">
-                <div className="rounded-full border-2 border-black">
+                <div className="rounded-full border-2 border-[var(--color-retro-border)]">
                      <img src={logoPng} alt="" className="w-10 h-10" />
                 </div>
                 <h3 className="font-black text-2xl uppercase mt-2">Create Your Character</h3>
                 {createVoiceId && (
-                  <div className="font-mono text-xs text-gray-700">
+                  <div className="font-mono text-xs" style={{ color: 'var(--color-retro-fg-secondary)' }}>
                     Create a Personality with {createVoiceName || createVoiceId}
                   </div>
                 )}
@@ -170,7 +170,7 @@ export function PersonalityModal({ open, mode, personality, createVoiceId, creat
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Describe the character you'd like to create..."
-                    className="w-full min-h-[120px] p-4 pr-14 rounded-[20px] border-2 border-black resize-none text-lg bg-white focus:outline-none shadow-inner placeholder:text-gray-500"
+                    className="retro-input w-full min-h-[120px] p-4 pr-14 rounded-[20px] resize-none text-lg focus:outline-none"
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();

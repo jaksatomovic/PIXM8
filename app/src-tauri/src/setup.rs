@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use crate::paths::{
-    bootstrap_python_if_needed, get_bootstrap_python, get_pixm8_dir, get_venv_path, get_venv_pip,
+    bootstrap_python_if_needed, get_bootstrap_python, get_keero_dir, get_venv_path, get_venv_pip,
     get_venv_python,
 };
 use crate::python_setup;
@@ -166,17 +166,17 @@ pub async fn install_python_deps(app: AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn mark_setup_complete(app: AppHandle) -> Result<(), String> {
-    let pixm8_dir = get_pixm8_dir(&app);
-    let marker_file = pixm8_dir.join(".setup_complete");
-    fs::create_dir_all(&pixm8_dir).map_err(|e: std::io::Error| e.to_string())?;
+    let keero_dir = get_keero_dir(&app);
+    let marker_file = keero_dir.join(".setup_complete");
+    fs::create_dir_all(&keero_dir).map_err(|e: std::io::Error| e.to_string())?;
     fs::write(&marker_file, "1").map_err(|e: std::io::Error| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn is_first_launch(app: AppHandle) -> Result<bool, String> {
-    let pixm8_dir = get_pixm8_dir(&app);
-    let marker_file = pixm8_dir.join(".setup_complete");
+    let keero_dir = get_keero_dir(&app);
+    let marker_file = keero_dir.join(".setup_complete");
     let venv_python = get_venv_python(&app);
 
     Ok(!marker_file.exists() || !venv_python.exists())

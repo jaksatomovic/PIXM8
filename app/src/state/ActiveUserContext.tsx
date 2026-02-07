@@ -24,7 +24,7 @@ type ActiveUserContextValue = {
 
 const ActiveUserContext = createContext<ActiveUserContextValue | null>(null);
 
-const STORAGE_KEY = "pixm8.activeUserId";
+const STORAGE_KEY = "keero.activeUserId";
 
 export function ActiveUserProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);

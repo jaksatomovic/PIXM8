@@ -1,0 +1,7 @@
+{
+  "id": "dummy-test-pack",
+  "name": "Dummy Test Pack",
+  "version": "1.0.0",
+  "author": "Test",
+  "description": "Minimal addon for testing install. Adds one dummy personality and one dummy game."
+}

@@ -1,12 +1,13 @@
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
-ExperienceType = Literal["personality", "game", "story"]
+# Experience type is a string; no restriction (personality, game, story, tool, workflow, etc.)
+ExperienceType = str
 
 
 @dataclass
 class Experience:
-    """Base model for personalities, games, and stories."""
+    """Base model for personalities, games, stories, and future types."""
     id: str
     name: str
     prompt: str
@@ -15,9 +16,13 @@ class Experience:
     is_visible: bool
     is_global: bool
     voice_id: str
-    type: ExperienceType = "personality"
+    type: str = "personality"
     img_src: Optional[str] = None
     created_at: Optional[float] = None
+    addon_id: Optional[str] = None
+    is_builtin: bool = False
+    updated_at: Optional[float] = None
+    meta_json: Optional[str] = None
 
 
 # Alias for backward compatibility
@@ -33,6 +38,24 @@ class Voice:
     voice_src: Optional[str]
     is_global: bool
     created_at: Optional[float] = None
+    addon_id: Optional[str] = None
+    is_builtin: bool = False
+    local_path: Optional[str] = None
+    updated_at: Optional[float] = None
+
+
+@dataclass
+class Addon:
+    id: str
+    name: str
+    version: str
+    author: Optional[str]
+    description: Optional[str]
+    source: str
+    installed_at: float
+    is_enabled: bool
+    manifest_json: Optional[str]
+    permissions_json: Optional[str]
 
 
 @dataclass
@@ -42,6 +65,8 @@ class Conversation:
     transcript: str
     timestamp: float
     session_id: Optional[str] = None
+    user_id: Optional[str] = None
+    experience_id: Optional[str] = None
 
 
 @dataclass
@@ -56,6 +81,7 @@ class User:
     current_personality_id: Optional[str]
     user_type: str = "family"
     avatar_emoji: Optional[str] = None
+    settings_json: Optional[str] = None
 
 
 @dataclass

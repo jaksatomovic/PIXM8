@@ -30,6 +30,25 @@ function ensureSymlink(binDir, name, target) {
   }
 }
 
+function ensureAppVenvMultipart() {
+  const home = os.homedir();
+  const pip =
+    process.platform === 'darwin'
+      ? path.join(home, 'Library', 'Application Support', 'io.keero', 'python_env', 'bin', 'pip')
+      : process.platform === 'win32'
+        ? path.join(home, 'AppData', 'Roaming', 'io.keero', 'python_env', 'Scripts', 'pip.exe')
+        : path.join(home, '.local', 'share', 'io.keero', 'python_env', 'bin', 'pip');
+  if (!exists(pip)) return;
+  const r = spawnSync(pip, ['install', '--quiet', 'python-multipart'], { stdio: 'pipe' });
+  if (r.status !== 0) {
+    try {
+      spawnSync(pip, ['install', 'python-multipart'], { stdio: 'inherit' });
+    } catch {
+      // ignore
+    }
+  }
+}
+
 function main() {
   const repoRoot = path.resolve(import.meta.dirname, '..', '..');
   const runtimeRoot = path.join(repoRoot, 'resources', 'python_runtime');
@@ -45,12 +64,13 @@ function main() {
   }
   if (exists(python) || exists(python3) || exists(python311)) {
     console.log('[python-runtime] OK (already present)');
+    ensureAppVenvMultipart();
     return;
   }
 
   console.log('[python-runtime] Downloading standalone Python runtime...');
 
-  const tmpTar = path.join(os.tmpdir(), `elato-python-runtime-${Date.now()}.tar.gz`);
+  const tmpTar = path.join(os.tmpdir(), `keero-python-runtime-${Date.now()}.tar.gz`);
   try {
     fs.rmSync(runtimeRoot, { recursive: true, force: true });
     fs.mkdirSync(runtimeRoot, { recursive: true });
@@ -68,6 +88,7 @@ function main() {
     }
 
     console.log('[python-runtime] Ready.');
+    ensureAppVenvMultipart();
   } finally {
     try {
       fs.rmSync(tmpTar, { force: true });

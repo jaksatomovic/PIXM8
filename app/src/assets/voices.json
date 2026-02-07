@@ -1,107 +1,44 @@
 [
   {
-    "voice_id": "paddy_bear",
+    "voice_id": "crisp_narrator",
     "gender": "male",
-    "voice_name": "Paddy The Bear",
-    "voice_description": "Based off Paddington Bear this character is a friendly and kind-hearted bear who always has a smile on his face.",
-    "voice_src": "paddy_bear.wav"
-  },
-  {
-    "voice_id": "highschooler",
-    "gender": "female",
-    "voice_name": "👩‍🎓 Highschooler",
-    "voice_description": "Energetic high-school teen voice with playful cadence",
-    "voice_src": "highschooler.wav"
-  },
-  {
-    "voice_id": "old_wise_man",
-    "gender": "male",
-    "voice_name": "👴🏼 Old Wise Man",
-    "voice_description": "Warm elderly storyteller voice with slow, deliberate delivery",
-    "voice_src": "old_wise_man.wav"
-  },
-  {
-    "voice_id": "narrator1",
-    "gender": "male",
-    "voice_name": "👩‍🏫 Narrator",
-    "voice_description": "Clean neutral narrator voice for general-purpose reading",
+    "voice_name": "Crisp Narrator",
+    "voice_description": "Clean, neutral narrator voice for clear delivery and general-purpose reading.",
     "voice_src": "narrator1.wav"
   },
   {
-    "voice_id": "father_christmas",
+    "voice_id": "warm_narrator",
     "gender": "male",
-    "voice_name": "🧑‍🎄 Father Christmas",
-    "voice_description": "Deep cozy holiday Santa voice with a friendly, hearty tone",
-    "voice_src": "father_christmas.wav"
+    "voice_name": "Warm Narrator",
+    "voice_description": "Warm, deliberate storyteller voice with a cozy, reassuring tone.",
+    "voice_src": "old_wise_man.wav"
   },
   {
-    "voice_id": "british_woman_narrator",
-    "gender": "female",
-    "voice_name": "🇬🇧 British Woman Narrator",
-    "voice_description": "Polished British female narrator with crisp articulation",
-    "voice_src": "british_woman_narrator.wav"
-  },
-  {
-    "voice_id": "quiz_show",
+    "voice_id": "friendly_male",
     "gender": "male",
-    "voice_name": "🧑🏻 Quiz Show Host",
-    "voice_description": "Upbeat game-show host voice with punchy emphasis",
-    "voice_src": "quiz_show.wav"
-  },
-  {
-    "voice_id": "girl2",
-    "gender": "female",
-    "voice_name": "👧 Girl Voice",
-    "voice_description": "Bright friendly female voice with a slightly higher pitch",
-    "voice_src": "girl2.wav"
-  },
-  {
-    "voice_id": "teen_dude",
-    "gender": "male",
-    "voice_name": "👦🏻 Teen Boy",
-    "voice_description": "Casual teen guy voice with laid-back energy",
-    "voice_src": "teen_dude.wav"
-  },
-  {
-    "voice_id": "aussie",
-    "gender": "male",
-    "voice_name": "🦘 Aussie Guy",
-    "voice_description": "Australian-accented guy voice with easygoing tone",
+    "voice_name": "Friendly Male",
+    "voice_description": "Easygoing, approachable male voice—confident and supportive.",
     "voice_src": "aussie.wav"
   },
   {
-    "voice_id": "wrestling",
-    "gender": "male",
-    "voice_name": "🤼‍♂️ Wrestling Announcer",
-    "voice_description": "Hyped arena announcer voice with big, dramatic projection",
-    "voice_src": "wrestling.wav"
-  },
-  {
-    "voice_id": "troll",
-    "gender": "male",
-    "voice_name": "🧌 Troll",
-    "voice_description": "Goofy troll voice for pranks and comedic bits",
-    "voice_src": "troll.wav"
-  },
-  {
-    "voice_id": "tiktok",
+    "voice_id": "friendly_female",
     "gender": "female",
-    "voice_name": "👧 TikTok Girl",
-    "voice_description": "Modern social-media narrator with quick upbeat rhythm",
-    "voice_src": "tiktok.wav"
+    "voice_name": "Friendly Female",
+    "voice_description": "Bright, friendly female voice with a warm and encouraging tone.",
+    "voice_src": "girl2.wav"
   },
   {
-    "voice_id": "radio",
+    "voice_id": "radio_host",
     "gender": "male",
-    "voice_name": "📻 Radio Announcer",
-    "voice_description": "Classic radio announcer voice with confident broadcast delivery",
+    "voice_name": "Radio Host",
+    "voice_description": "Confident broadcast-style voice with smooth pacing and clear articulation.",
     "voice_src": "radio.wav"
   },
   {
-    "voice_id": "santa",
-    "gender": "male",
-    "voice_name": "🎅 Santa",
-    "voice_description": "Warm, jolly Santa voice with friendly chuckle energy",
-    "voice_src": "santa.wav"
+    "voice_id": "british_narrator",
+    "gender": "female",
+    "voice_name": "British Narrator",
+    "voice_description": "Polished British narrator with crisp articulation and a composed, professional tone.",
+    "voice_src": "british_woman_narrator.wav"
   }
 ]

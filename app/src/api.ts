@@ -219,7 +219,7 @@ export const api = {
   },
 
   updateUser: async (id: string, data: any) => {
-    return request(`/users/${id}`, {
+    return request(`/users/${encodeURIComponent(id)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -355,5 +355,47 @@ export const api = {
         // Skip malformed data
       }
     }
+  },
+
+  // Addons
+  installAddon: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request(`/addons/install`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  listAddons: async () => {
+    return request(`/addons/list`);
+  },
+
+  setAddonEnabled: async (addonId: string, isEnabled: boolean) => {
+    return request(`/addons/set_enabled`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addon_id: addonId, is_enabled: isEnabled }),
+    });
+  },
+
+  getAddonCatalog: async () => {
+    return request(`/addons/catalog`);
+  },
+
+  installAddonFromUrl: async (url: string) => {
+    return request(`/addons/install_from_url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+  },
+
+  uninstallAddon: async (addonId: string) => {
+    return request(`/addons/uninstall`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addon_id: addonId }),
+    });
   },
 };
