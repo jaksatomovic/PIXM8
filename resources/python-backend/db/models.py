@@ -79,6 +79,7 @@ class User:
     personality_type: Optional[str]
     likes: List[str]
     current_personality_id: Optional[str]
+    current_voice_id: Optional[str] = None
     user_type: str = "family"
     avatar_emoji: Optional[str] = None
     settings_json: Optional[str] = None

@@ -45,7 +45,9 @@ from services import (
     VoicePipeline,
     firmware_bin_path,
     get_local_ip,
+    get_user_preferences,
     list_serial_ports,
+    resolve_voice_id,
     resolve_voice_ref_audio_path,
     run_firmware_flash,
     sanitize_spoken_text,
@@ -344,6 +346,7 @@ async def get_active_user():
             "id": user.id,
             "name": user.name,
             "current_personality_id": user.current_personality_id,
+            "current_voice_id": getattr(user, "current_voice_id", None),
         } if user else None
     }
 
@@ -355,6 +358,200 @@ async def set_active_user(body: ActiveUserUpdate):
     """Set the active user ID."""
     db_service.db_service.set_active_user_id(body.user_id)
     return await get_active_user()
+
+
+# --- User preferences (default voice, default personality) ---
+
+@app.get("/users/me/preferences")
+async def get_my_preferences():
+    """Get preferences for the active user (default_voice_id, default_personality_id, toggles)."""
+    user_id = db_service.db_service.get_active_user_id()
+    user = db_service.db_service.get_user(user_id) if user_id else None
+    if not user:
+        return {
+            "default_voice_id": None,
+            "default_personality_id": None,
+            "default_profile_id": None,
+            "profiles": [],
+            "use_default_voice_everywhere": True,
+            "allow_experience_voice_override": False,
+        }
+    prefs = get_user_preferences(getattr(user, "settings_json", None))
+    return {
+        "default_voice_id": prefs.get("default_voice_id"),
+        "default_personality_id": prefs.get("default_personality_id"),
+        "default_profile_id": prefs.get("default_profile_id"),
+        "profiles": prefs.get("profiles", []),
+        "use_default_voice_everywhere": prefs.get("use_default_voice_everywhere", True),
+        "allow_experience_voice_override": prefs.get("allow_experience_voice_override", False),
+    }
+
+
+class PreferencesUpdate(BaseModel):
+    default_voice_id: Optional[str] = None
+    default_personality_id: Optional[str] = None
+    default_profile_id: Optional[str] = None
+    use_default_voice_everywhere: Optional[bool] = None
+    allow_experience_voice_override: Optional[bool] = None
+
+
+@app.post("/users/me/preferences")
+async def set_my_preferences(body: PreferencesUpdate):
+    """Update preferences for the active user. Validates voice and personality exist."""
+    user_id = db_service.db_service.get_active_user_id()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="No active user. Select a member first.")
+    user = db_service.db_service.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    prefs = get_user_preferences(getattr(user, "settings_json", None))
+
+    if body.default_voice_id is not None:
+        if body.default_voice_id.strip():
+            if not db_service.db_service._voice_exists(body.default_voice_id.strip()):
+                raise HTTPException(status_code=400, detail=f"Voice not found: {body.default_voice_id}")
+            prefs["default_voice_id"] = body.default_voice_id.strip()
+        else:
+            prefs["default_voice_id"] = None
+    if body.default_personality_id is not None:
+        if body.default_personality_id.strip():
+            p = db_service.db_service.get_experience(body.default_personality_id.strip())
+            if not p or getattr(p, "type", "personality") != "personality":
+                raise HTTPException(status_code=400, detail=f"Personality not found: {body.default_personality_id}")
+            prefs["default_personality_id"] = body.default_personality_id.strip()
+        else:
+            prefs["default_personality_id"] = None
+    if body.default_profile_id is not None:
+        if body.default_profile_id.strip():
+            profile_ids = [pr.get("id") for pr in (prefs.get("profiles") or []) if pr.get("id")]
+            if body.default_profile_id.strip() not in profile_ids:
+                raise HTTPException(status_code=400, detail="Profile not found")
+            prefs["default_profile_id"] = body.default_profile_id.strip()
+        else:
+            prefs["default_profile_id"] = None
+    if body.use_default_voice_everywhere is not None:
+        prefs["use_default_voice_everywhere"] = body.use_default_voice_everywhere
+    if body.allow_experience_voice_override is not None:
+        prefs["allow_experience_voice_override"] = body.allow_experience_voice_override
+
+    _save_user_preferences(user_id, prefs)
+    return await get_my_preferences()
+
+
+def _save_user_preferences(user_id: str, prefs: dict) -> None:
+    """Serialize and save full preferences (including profiles) to user.settings_json."""
+    out = {
+        "default_voice_id": prefs.get("default_voice_id"),
+        "default_personality_id": prefs.get("default_personality_id"),
+        "default_profile_id": prefs.get("default_profile_id"),
+        "profiles": prefs.get("profiles", []),
+        "use_default_voice_everywhere": prefs.get("use_default_voice_everywhere", True),
+        "allow_experience_voice_override": prefs.get("allow_experience_voice_override", False),
+    }
+    db_service.db_service.update_user(user_id, settings_json=json.dumps(out))
+
+
+# --- Profiles (voice + personality pairs) ---
+
+class ProfileCreate(BaseModel):
+    name: str
+    voice_id: str
+    personality_id: str
+
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    voice_id: Optional[str] = None
+    personality_id: Optional[str] = None
+
+
+@app.get("/users/me/profiles")
+async def get_my_profiles():
+    """List profiles for the active user."""
+    prefs = await get_my_preferences()
+    return {"profiles": (prefs.get("profiles") or [])}
+
+
+@app.post("/users/me/profiles")
+async def create_profile(body: ProfileCreate):
+    """Create a profile (voice + personality pair)."""
+    user_id = db_service.db_service.get_active_user_id()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="No active user.")
+    user = db_service.db_service.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if not body.voice_id or not db_service.db_service._voice_exists(body.voice_id.strip()):
+        raise HTTPException(status_code=400, detail="Voice not found.")
+    p = db_service.db_service.get_experience((body.personality_id or "").strip())
+    if not p or getattr(p, "type", "personality") != "personality":
+        raise HTTPException(status_code=400, detail="Personality not found.")
+    prefs = get_user_preferences(getattr(user, "settings_json", None))
+    profiles = list(prefs.get("profiles") or [])
+    profile_id = str(uuid.uuid4())
+    profiles.append({
+        "id": profile_id,
+        "name": (body.name or "Profile").strip()[:80],
+        "voice_id": body.voice_id.strip(),
+        "personality_id": body.personality_id.strip(),
+    })
+    prefs["profiles"] = profiles
+    _save_user_preferences(user_id, prefs)
+    return {"profiles": profiles, "id": profile_id}
+
+
+@app.put("/users/me/profiles/{profile_id}")
+async def update_profile(profile_id: str, body: ProfileUpdate):
+    """Update a profile."""
+    user_id = db_service.db_service.get_active_user_id()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="No active user.")
+    user = db_service.db_service.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    prefs = get_user_preferences(getattr(user, "settings_json", None))
+    profiles = list(prefs.get("profiles") or [])
+    found = None
+    for i, pr in enumerate(profiles):
+        if pr.get("id") == profile_id:
+            if body.name is not None:
+                profiles[i]["name"] = (body.name or "").strip()[:80] or profiles[i].get("name", "")
+            if body.voice_id is not None:
+                if body.voice_id.strip() and not db_service.db_service._voice_exists(body.voice_id.strip()):
+                    raise HTTPException(status_code=400, detail="Voice not found.")
+                profiles[i]["voice_id"] = body.voice_id.strip() if body.voice_id else profiles[i].get("voice_id")
+            if body.personality_id is not None:
+                p = db_service.db_service.get_experience((body.personality_id or "").strip())
+                if body.personality_id and (not p or getattr(p, "type", "personality") != "personality"):
+                    raise HTTPException(status_code=400, detail="Personality not found.")
+                profiles[i]["personality_id"] = body.personality_id.strip() if body.personality_id else profiles[i].get("personality_id")
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    prefs["profiles"] = profiles
+    _save_user_preferences(user_id, prefs)
+    return {"profiles": profiles}
+
+
+@app.delete("/users/me/profiles/{profile_id}")
+async def delete_profile(profile_id: str):
+    """Delete a profile. Clears default_profile_id if it pointed to this profile."""
+    user_id = db_service.db_service.get_active_user_id()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="No active user.")
+    user = db_service.db_service.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    prefs = get_user_preferences(getattr(user, "settings_json", None))
+    profiles = [pr for pr in (prefs.get("profiles") or []) if pr.get("id") != profile_id]
+    if prefs.get("default_profile_id") == profile_id:
+        prefs["default_profile_id"] = None
+    prefs["profiles"] = profiles
+    _save_user_preferences(user_id, prefs)
+    return {"profiles": profiles}
+
 
 @app.get("/app-mode")
 async def get_app_mode():
@@ -740,6 +937,15 @@ async def switch_model(body: ModelSwitchRequest):
 
 # --- Voices ---
 
+def _voice_is_downloaded(voice_id: str) -> bool:
+    """True if voice_id.wav exists in KEERO_VOICES_DIR."""
+    try:
+        voices_dir = Path(os.environ.get("KEERO_VOICES_DIR") or _app_data_dir().joinpath("voices"))
+        return (voices_dir / f"{voice_id}.wav").is_file()
+    except Exception:
+        return False
+
+
 @app.get("/voices")
 async def get_voices(include_non_global: bool = True):
     voices = db_service.db_service.get_voices(include_non_global=include_non_global)
@@ -751,6 +957,8 @@ async def get_voices(include_non_global: bool = True):
             "voice_description": v.voice_description,
             "voice_src": v.voice_src,
             "is_global": v.is_global,
+            "is_builtin": getattr(v, "is_builtin", False),
+            "is_downloaded": _voice_is_downloaded(v.voice_id),
             "created_at": getattr(v, "created_at", None),
         }
         for v in voices
@@ -985,6 +1193,7 @@ async def get_users():
             "name": u.name,
             "age": u.age,
             "current_personality_id": u.current_personality_id,
+            "current_voice_id": getattr(u, "current_voice_id", None),
             "user_type": u.user_type,
             "about_you": getattr(u, "about_you", "") or "",
             "avatar_emoji": getattr(u, "avatar_emoji", None),
@@ -1222,6 +1431,203 @@ async def get_conversations(limit: int = 50, offset: int = 0, session_id: Option
 
 # --- Sessions ---
 
+def _resolve_personality_id_for_user(user_id: Optional[str]):
+    """
+    Resolve which personality to use for chat/session.
+    Active (user.current_personality_id) takes precedence, then default from settings, then first available.
+    Returns (personality_id, personality_obj or None).
+    """
+    if not user_id:
+        first = db_service.db_service.get_experiences(include_hidden=False, experience_type="personality")
+        pid = first[0].id if first else None
+        p = db_service.db_service.get_experience(pid) if pid else None
+        return (pid, p)
+    u = db_service.db_service.get_user(user_id)
+    if not u:
+        first = db_service.db_service.get_experiences(include_hidden=False, experience_type="personality")
+        pid = first[0].id if first else None
+        p = db_service.db_service.get_experience(pid) if pid else None
+        return (pid, p)
+    prefs = get_user_preferences(getattr(u, "settings_json", None))
+    active = u.current_personality_id
+    if active:
+        p = db_service.db_service.get_experience(active)
+        if p and getattr(p, "type", "personality") == "personality":
+            return (active, p)
+    # Default profile (voice + personality pair) takes precedence over standalone default_personality_id
+    default_profile_id = prefs.get("default_profile_id") or None
+    if default_profile_id:
+        for pr in (prefs.get("profiles") or []):
+            if pr.get("id") == default_profile_id and pr.get("personality_id"):
+                p = db_service.db_service.get_experience(pr["personality_id"])
+                if p and getattr(p, "type", "personality") == "personality":
+                    return (pr["personality_id"], p)
+                break
+    default = prefs.get("default_personality_id") or None
+    if default:
+        p = db_service.db_service.get_experience(default)
+        if p and getattr(p, "type", "personality") == "personality":
+            return (default, p)
+    first = db_service.db_service.get_experiences(include_hidden=False, experience_type="personality")
+    pid = first[0].id if first else None
+    p = db_service.db_service.get_experience(pid) if pid else None
+    return (pid, p)
+
+
+def _resolve_voice_id_for_session(user, prefs: dict, personality, fallback_voice_id: Optional[str] = None) -> str:
+    """Resolve voice_id for session: current_voice_id > default_profile.voice_id > resolve_voice_id(prefs, personality)."""
+    if user and getattr(user, "current_voice_id", None):
+        if db_service.db_service._voice_exists(user.current_voice_id):
+            return user.current_voice_id
+    default_profile_id = prefs.get("default_profile_id") or None
+    if default_profile_id:
+        for pr in (prefs.get("profiles") or []):
+            if pr.get("id") == default_profile_id and pr.get("voice_id"):
+                if db_service.db_service._voice_exists(pr["voice_id"]):
+                    return pr["voice_id"]
+                break
+    exp_voice = getattr(personality, "voice_id", None) if personality else None
+    return resolve_voice_id(prefs, exp_voice, fallback_voice_id or "radio")
+
+
+def _sessions_active_response():
+    """Build response for GET /sessions/active and POST /sessions/active/*."""
+    user_id = db_service.db_service.get_active_user_id()
+    user = db_service.db_service.get_user(user_id) if user_id else None
+    prefs = get_user_preferences(getattr(user, "settings_json", None)) if user else {}
+    active_id = user.current_personality_id if user else None
+    default_id = prefs.get("default_personality_id") or None
+    default_profile_id = prefs.get("default_profile_id") or None
+    profiles = prefs.get("profiles") or []
+    active_voice_id = getattr(user, "current_voice_id", None) if user else None
+    default_voice_id = prefs.get("default_voice_id") or None
+    active_name = None
+    default_name = None
+    if active_id:
+        p = db_service.db_service.get_experience(active_id)
+        if p:
+            active_name = p.name
+    if default_id:
+        p = db_service.db_service.get_experience(default_id)
+        if p:
+            default_name = p.name
+    return {
+        "session_id": None,
+        "active_personality_id": active_id,
+        "default_personality_id": default_id,
+        "active_personality_name": active_name,
+        "default_personality_name": default_name,
+        "active_voice_id": active_voice_id,
+        "default_voice_id": default_voice_id,
+        "default_profile_id": default_profile_id,
+        "profiles": profiles,
+    }
+
+
+@app.get("/sessions/active")
+async def get_sessions_active():
+    """Return active session state: active_personality_id (current), default_personality_id, and names."""
+    return _sessions_active_response()
+
+
+class SetActivePersonalityBody(BaseModel):
+    personality_id: str
+
+
+@app.post("/sessions/active/personality")
+async def set_active_personality(body: SetActivePersonalityBody):
+    """Set the active personality for the current user (use for this session)."""
+    user_id = db_service.db_service.get_active_user_id()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="No active user. Select a member first.")
+    pid = (body.personality_id or "").strip()
+    if not pid:
+        raise HTTPException(status_code=400, detail="personality_id is required")
+    p = db_service.db_service.get_experience(pid)
+    if not p or getattr(p, "type", "personality") != "personality":
+        raise HTTPException(status_code=400, detail=f"Personality not found: {pid}")
+    db_service.db_service.update_user(user_id, current_personality_id=pid)
+    return _sessions_active_response()
+
+
+@app.post("/sessions/active/reset")
+async def reset_active_personality():
+    """Reset active personality and voice to default (from user preferences or default profile)."""
+    user_id = db_service.db_service.get_active_user_id()
+    if not user_id:
+        return _sessions_active_response()
+    user = db_service.db_service.get_user(user_id)
+    prefs = get_user_preferences(getattr(user, "settings_json", None)) if user else {}
+    default_profile_id = prefs.get("default_profile_id") or None
+    default_id = prefs.get("default_personality_id") or None
+    default_voice_id = None
+    if default_profile_id:
+        for pr in (prefs.get("profiles") or []):
+            if pr.get("id") == default_profile_id:
+                default_id = pr.get("personality_id") or default_id
+                default_voice_id = pr.get("voice_id")
+                break
+    db_service.db_service.update_user(user_id, current_personality_id=default_id, current_voice_id=default_voice_id)
+    return _sessions_active_response()
+
+
+class SetActiveVoiceBody(BaseModel):
+    voice_id: str
+
+
+@app.post("/sessions/active/voice")
+async def set_active_voice(body: SetActiveVoiceBody):
+    """Set the active voice for the current user (use for this session)."""
+    user_id = db_service.db_service.get_active_user_id()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="No active user. Select a member first.")
+    vid = (body.voice_id or "").strip()
+    if not vid:
+        raise HTTPException(status_code=400, detail="voice_id is required")
+    if not db_service.db_service._voice_exists(vid):
+        raise HTTPException(status_code=400, detail=f"Voice not found: {vid}")
+    db_service.db_service.update_user(user_id, current_voice_id=vid)
+    return _sessions_active_response()
+
+
+class SetActiveProfileBody(BaseModel):
+    profile_id: str
+
+
+@app.post("/sessions/active/profile")
+async def set_active_profile(body: SetActiveProfileBody):
+    """Set the active voice + personality from a profile (use for this session)."""
+    user_id = db_service.db_service.get_active_user_id()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="No active user. Select a member first.")
+    pid = (body.profile_id or "").strip()
+    if not pid:
+        raise HTTPException(status_code=400, detail="profile_id is required")
+    user = db_service.db_service.get_user(user_id)
+    prefs = get_user_preferences(getattr(user, "settings_json", None)) if user else {}
+    profile = None
+    for pr in (prefs.get("profiles") or []):
+        if pr.get("id") == pid:
+            profile = pr
+            break
+    if not profile:
+        raise HTTPException(status_code=400, detail="Profile not found")
+    personality_id = (profile.get("personality_id") or "").strip()
+    voice_id = (profile.get("voice_id") or "").strip()
+    if personality_id:
+        p = db_service.db_service.get_experience(personality_id)
+        if not p or getattr(p, "type", "personality") != "personality":
+            raise HTTPException(status_code=400, detail="Profile personality not found")
+    if voice_id and not db_service.db_service._voice_exists(voice_id):
+        raise HTTPException(status_code=400, detail="Profile voice not found")
+    db_service.db_service.update_user(
+        user_id,
+        current_personality_id=personality_id or None,
+        current_voice_id=voice_id or None,
+    )
+    return _sessions_active_response()
+
+
 @app.get("/sessions")
 async def get_sessions(limit: int = 50, offset: int = 0, user_id: Optional[str] = None):
     """Get sessions."""
@@ -1397,13 +1803,10 @@ async def websocket_unified(websocket: WebSocket, client_type: str = Query(defau
     if is_esp32:
         ESP32_SESSION_ID = session_id
     
-    # Get active user/personality
+    # Get active user / resolved personality (active -> default -> first)
     user_id = db_service.db_service.get_active_user_id()
-    personality_id = None
-    if user_id:
-        u = db_service.db_service.get_user(user_id)
-        personality_id = u.current_personality_id if u else None
-    
+    personality_id, _ = _resolve_personality_id_for_user(user_id)
+
     personality = None
     if personality_id:
         try:
@@ -1596,7 +1999,11 @@ async def websocket_unified(websocket: WebSocket, client_type: str = Query(defau
         
         logger.info(f"{client_label} Greeting: {greeting_text}")
         
-        ref_audio_path = resolve_voice_ref_audio_path(getattr(personality, "voice_id", None))
+        u = db_service.db_service.get_user(user_id) if user_id else None
+        prefs = get_user_preferences(getattr(u, "settings_json", None)) if u else get_user_preferences(None)
+        fallback = db_service.db_service._default_voice_id()
+        resolved_voice_id = _resolve_voice_id_for_session(u, prefs, personality, fallback)
+        ref_audio_path = resolve_voice_ref_audio_path(resolved_voice_id)
         
         if is_esp32:
             # ESP32: Send RESPONSE.CREATED, then Opus audio, then RESPONSE.COMPLETE
@@ -1781,8 +2188,12 @@ async def websocket_unified(websocket: WebSocket, client_type: str = Query(defau
         except Exception as e:
             logger.error(f"Failed to log AI conversation: {e}")
 
-        # Stream TTS audio
-        ref_audio_path = resolve_voice_ref_audio_path(getattr(personality, "voice_id", None))
+        # Stream TTS audio (session voice: current_voice_id > default profile > prefs)
+        u = db_service.db_service.get_user(user_id) if user_id else None
+        prefs = get_user_preferences(getattr(u, "settings_json", None)) if u else get_user_preferences(None)
+        fallback = db_service.db_service._default_voice_id()
+        resolved_voice_id = _resolve_voice_id_for_session(u, prefs, personality, fallback)
+        ref_audio_path = resolve_voice_ref_audio_path(resolved_voice_id)
         
         if for_esp32:
             # ESP32: Encode to Opus and send binary

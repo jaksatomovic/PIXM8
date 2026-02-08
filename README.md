@@ -107,6 +107,32 @@ This ensures the core content always remains available while allowing community 
 
 Built-in content: base voices in `app/src/assets/packs/fun_voices/voices.json`, base personalities in `app/src/assets/personalities.json`; optional pack content (play pack, stories pack) under `app/src/assets/packs/`. See **app/src/assets/README.md** for the full layout and addon mapping.
 
+## Default Voice and Default Personality (Personalization)
+
+Voices and personalities are **decoupled**: you choose a **default voice** and a **default personality** that apply globally (chat, stories, games) unless you allow overrides.
+
+### How it works
+
+1. **Settings → Personalization**
+   - **Default Voice** — Choose from all installed voices (download from Voices if needed). This voice is used for TTS in chat, stories, and games.
+   - **Default Personality** — Choose from all installed personalities (type = personality). This is the default character/mode for chat and sessions.
+   - **Use default voice everywhere** (default: ON) — When ON, your default voice is always used. When OFF, the experience’s own voice can be used if you enable the override below.
+   - **Allow experience voice override** (default: OFF) — When ON, personalities/games/stories can use their own `voice_id` instead of your default.
+
+2. **Personalities** (sidebar)
+   - Browse all installed personalities (from built-in and packs).
+   - **Set as Default** — Saves this personality as your default in preferences.
+   - **Use for this session** — Sets this personality as the active one for the current member and opens chat.
+
+3. **Voice resolution**
+   - If you have a default voice and “use default voice everywhere” is ON → that voice is used.
+   - If “allow experience voice override” is ON and the current experience has a `voice_id` → that experience voice is used.
+   - Otherwise your default voice (or first available voice) is used.
+
+### Installing more personalities
+
+Install addon packs from **Packs** (sidebar): many packs include personalities. After installing a pack, new personalities appear on **Personalities** and in **Home** (Chat tab).
+
 ## Project Structure
 
 ```

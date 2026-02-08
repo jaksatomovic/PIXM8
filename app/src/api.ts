@@ -95,6 +95,24 @@ export const api = {
     });
   },
 
+  getPreferences: async () => {
+    return request(`/users/me/preferences`);
+  },
+
+  setPreferences: async (body: {
+    default_voice_id?: string | null;
+    default_personality_id?: string | null;
+    default_profile_id?: string | null;
+    use_default_voice_everywhere?: boolean;
+    allow_experience_voice_override?: boolean;
+  }) => {
+    return request(`/users/me/preferences`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+
   getAppMode: async () => {
     return request(`/app-mode`);
   },
@@ -239,6 +257,64 @@ export const api = {
     const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (userId) qs.set("user_id", userId);
     return request(`/sessions?${qs.toString()}`);
+  },
+
+  getActiveSession: async () => {
+    return request(`/sessions/active`);
+  },
+
+  setActiveSessionPersonality: async (personalityId: string) => {
+    return request(`/sessions/active/personality`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personality_id: personalityId }),
+    });
+  },
+
+  resetActiveSessionToDefault: async () => {
+    return request(`/sessions/active/reset`, { method: "POST" });
+  },
+
+  setActiveSessionVoice: async (voiceId: string) => {
+    return request(`/sessions/active/voice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voice_id: voiceId }),
+    });
+  },
+
+  setActiveSessionProfile: async (profileId: string) => {
+    return request(`/sessions/active/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile_id: profileId }),
+    });
+  },
+
+  getProfiles: async () => {
+    return request(`/users/me/profiles`);
+  },
+
+  createProfile: async (data: { name: string; voice_id: string; personality_id: string }) => {
+    return request(`/users/me/profiles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateProfile: async (profileId: string, data: { name?: string; voice_id?: string; personality_id?: string }) => {
+    return request(`/users/me/profiles/${encodeURIComponent(profileId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteProfile: async (profileId: string) => {
+    return request(`/users/me/profiles/${encodeURIComponent(profileId)}`, {
+      method: "DELETE",
+    });
   },
 
   getDeviceStatus: async () => {

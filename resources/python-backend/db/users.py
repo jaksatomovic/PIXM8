@@ -30,6 +30,7 @@ class UsersMixin:
                 personality_type=_col(row, "personality_type"),
                 likes=json.loads(v) if (v := _col(row, "likes")) else [],
                 current_personality_id=_col(row, "current_personality_id"),
+                current_voice_id=_col(row, "current_voice_id"),
                 user_type=(_col(row, "user_type") or "family"),
                 avatar_emoji=_col(row, "avatar_emoji"),
                 settings_json=_col(row, "settings_json"),
@@ -68,6 +69,7 @@ class UsersMixin:
         personality_type: Optional[str] = None,
         likes: Optional[List[str]] = None,
         current_personality_id: Optional[str] = None,
+        current_voice_id: Optional[str] = None,
         user_type: str = "family",
         avatar_emoji: Optional[str] = None,
         settings_json: Optional[str] = None,
@@ -78,8 +80,8 @@ class UsersMixin:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO users (id, name, age, dob, hobbies, about_you, personality_type, likes, current_personality_id, user_type, avatar_emoji, settings_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, name, age, dob, hobbies, about_you, personality_type, likes, current_personality_id, current_voice_id, user_type, avatar_emoji, settings_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 u_id,
@@ -91,6 +93,7 @@ class UsersMixin:
                 personality_type,
                 json.dumps(likes),
                 current_personality_id,
+                current_voice_id,
                 user_type,
                 avatar_emoji,
                 settings_json,
@@ -107,6 +110,7 @@ class UsersMixin:
             personality_type=personality_type,
             likes=likes,
             current_personality_id=current_personality_id,
+            current_voice_id=current_voice_id,
             user_type=user_type,
             avatar_emoji=avatar_emoji,
             settings_json=settings_json,
@@ -141,6 +145,9 @@ class UsersMixin:
         if "current_personality_id" in kwargs:
             fields.append("current_personality_id = ?")
             values.append(kwargs["current_personality_id"])
+        if "current_voice_id" in kwargs:
+            fields.append("current_voice_id = ?")
+            values.append(kwargs["current_voice_id"])
         if "user_type" in kwargs:
             fields.append("user_type = ?")
             values.append(kwargs["user_type"])

@@ -11,11 +11,16 @@ import { VoiceWsProvider, useVoiceWs } from '../state/VoiceWsContext';
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 
 const LayoutInner = () => {
-  const { activeUser } = useActiveUser();
+  const { activeUser, refreshUsers } = useActiveUser();
   const location = useLocation();
   const navigate = useNavigate();
   const voiceWs = useVoiceWs();
   const [activePersonalityName, setActivePersonalityName] = useState<string | null>(null);
+  const [activeSession, setActiveSession] = useState<{
+    active_personality_id: string | null;
+    default_personality_id: string | null;
+    active_personality_name: string | null;
+  } | null>(null);
   const [activePersonalityImageSrc, setActivePersonalityImageSrc] = useState<string | null>(null);
   const [activePersonalityImageError, setActivePersonalityImageError] = useState(false);
   const [activeVoiceId, setActiveVoiceId] = useState<string | null>(null);
@@ -23,7 +28,6 @@ const LayoutInner = () => {
   const [deviceSessionId, setDeviceSessionId] = useState<string | null>(null);
   const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
-
   // Network monitoring
   const [initialIp, setInitialIp] = useState<string | null>(null);
   const [showNetworkBanner, setShowNetworkBanner] = useState(false);
@@ -87,7 +91,18 @@ const LayoutInner = () => {
           setDeviceSessionId(ds?.session_id || null);
         }
 
-        const selectedId = activeUser?.current_personality_id;
+        const activeData = await api.getActiveSession().catch(() => null);
+        if (!cancelled && activeData) {
+          setActiveSession({
+            active_personality_id: activeData?.active_personality_id ?? null,
+            default_personality_id: activeData?.default_personality_id ?? null,
+            active_personality_name: activeData?.active_personality_name ?? null,
+          });
+        } else if (!cancelled) {
+          setActiveSession(null);
+        }
+
+        const selectedId = activeUser?.current_personality_id ?? activeData?.active_personality_id;
         if (!selectedId) {
           if (!cancelled) setActivePersonalityName(null);
           return;
@@ -96,7 +111,7 @@ const LayoutInner = () => {
         const ps = await api.getPersonalities(true).catch(() => []);
         const selected = ps.find((p: any) => p.id === selectedId);
         if (!cancelled) {
-          setActivePersonalityName(selected?.name || null);
+          setActivePersonalityName(selected?.name || activeData?.active_personality_name || null);
           setActiveVoiceId(selected?.voice_id ? String(selected.voice_id) : null);
           setActivePersonalityImageSrc(personalityImageSrc(selected));
           setActivePersonalityImageError(false);
@@ -252,7 +267,7 @@ const LayoutInner = () => {
             <Outlet />
           </div>
 
-        {activeUser?.current_personality_id && (
+        {(activeSession?.active_personality_id ?? activeUser?.current_personality_id) && (
           <div className="fixed bottom-0 z-20 left-64 right-0 pointer-events-none">
             <div className="max-w-4xl mx-auto px-8 pb-6 pointer-events-auto">
               <div className="retro-card rounded-full px-5 py-4 flex items-center justify-between">
@@ -277,7 +292,33 @@ const LayoutInner = () => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="flex flex-col items-end">
+                  <div className="flex flex-col items-end gap-2">
+                    {activeSession?.active_personality_id != null &&
+                      activeSession?.active_personality_id !== activeSession?.default_personality_id &&
+                      !localActive &&
+                      !deviceConnected && (
+                        <button
+                          type="button"
+                          className="retro-btn retro-btn-outline no-lift px-3 py-1.5 text-xs"
+                          onClick={async () => {
+                            try {
+                              await api.resetActiveSessionToDefault();
+                              await refreshUsers();
+                              const data = await api.getActiveSession().catch(() => null);
+                              if (data)
+                                setActiveSession({
+                                  active_personality_id: data?.active_personality_id ?? null,
+                                  default_personality_id: data?.default_personality_id ?? null,
+                                  active_personality_name: data?.active_personality_name ?? null,
+                                });
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                        >
+                          Reset to Default
+                        </button>
+                      )}
                     {!localActive && !deviceConnected && (
                       <button
                         type="button"

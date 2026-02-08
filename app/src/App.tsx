@@ -12,6 +12,7 @@ import { ChatModePage } from "./pages/ChatMode";
 import { SetupPage } from "./pages/Setup";
 import { ModelSetupPage } from "./pages/ModelSetup";
 import { VoicesPage } from "./pages/Voices";
+import { PersonalitiesPage } from "./pages/Personalities";
 import { api } from "./api";
 import { STARTUP_DEFAULT_MESSAGE } from "./constants";
 import "./App.css";
@@ -114,6 +115,7 @@ function App() {
             <Route index element={<Playground />} />
             <Route path="playground" element={<Playground />} />
             <Route path="packs" element={<PacksPage />} />
+            <Route path="personalities" element={<PersonalitiesPage />} />
             <Route path="voices" element={<VoicesPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="conversations" element={<Conversations />} />

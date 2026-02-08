@@ -1,7 +1,7 @@
 """Schema creation and migrations. Uses app_state.schema_version for versioning."""
 from sqlite3 import Connection
 
-TARGET_SCHEMA_VERSION = 3
+TARGET_SCHEMA_VERSION = 4
 
 
 def _column_exists(conn: Connection, table: str, column: str) -> bool:
@@ -127,6 +127,10 @@ def run_migrations(conn: Connection) -> None:
             _migrate_v2_to_v3(conn)
             current = 3
             set_schema_version(conn, current)
+        elif current == 3:
+            _migrate_v3_to_v4(conn)
+            current = 4
+            set_schema_version(conn, current)
         else:
             break
 
@@ -223,6 +227,19 @@ def _migrate_v2_to_v3(conn: Connection) -> None:
             conn.execute("CREATE INDEX idx_conversations_user_id ON conversations(user_id)")
         if not _index_exists(conn, "idx_conversations_experience_id"):
             conn.execute("CREATE INDEX idx_conversations_experience_id ON conversations(experience_id)")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def _migrate_v3_to_v4(conn: Connection) -> None:
+    """Add users.current_voice_id for session voice override (voice + personality pair)."""
+    conn.rollback()
+    conn.execute("BEGIN TRANSACTION")
+    try:
+        if not _column_exists(conn, "users", "current_voice_id"):
+            conn.execute("ALTER TABLE users ADD COLUMN current_voice_id TEXT")
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

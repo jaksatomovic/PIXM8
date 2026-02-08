@@ -3,7 +3,11 @@ from .mdns import MdnsService
 from .network import get_local_ip
 from .pipeline import VoicePipeline
 from .text import sanitize_spoken_text
-from .voice_refs import resolve_voice_ref_audio_path
+from .voice_refs import (
+    get_user_preferences,
+    resolve_voice_id,
+    resolve_voice_ref_audio_path,
+)
 from .ws_manager import ConnectionManager
 
 __all__ = [
@@ -12,7 +16,9 @@ __all__ = [
     "VoicePipeline",
     "firmware_bin_path",
     "get_local_ip",
+    "get_user_preferences",
     "list_serial_ports",
+    "resolve_voice_id",
     "resolve_voice_ref_audio_path",
     "run_firmware_flash",
     "sanitize_spoken_text",

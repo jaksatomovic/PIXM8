@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, LockKeyhole, Volume2, Settings, History, Plus, Gamepad2, Home, Dot, Package } from 'lucide-react';
+import { Users, User, LockKeyhole, Volume2, Settings, History, Plus, Home, Dot, Package } from 'lucide-react';
 import clsx from 'clsx';
 import { useActiveUser } from '../state/ActiveUserContext';
 import { useEffect, useState } from 'react';
@@ -44,7 +44,7 @@ const NavItem = ({
       )}
       aria-label={label}
     >
-      <Icon size={20} />
+      <Icon size={20} strokeWidth={2} />
       {iconOnly ? (
         <span className="sr-only">{label}</span>
       ) : (
@@ -103,7 +103,7 @@ export const Sidebar = () => {
   }, [activeUser?.current_personality_id]);
 
   return (
-    <div className="w-64 shrink-0 bg-transparent p-6 flex flex-col gap-6 h-full overflow-y-auto overscroll-contain justify-between">
+    <div className="w-68 shrink-0 bg-transparent p-6 flex flex-col gap-6 h-full overflow-y-auto overscroll-contain justify-between">
       <div className="retro-card rounded-[24px] overflow-hidden">
         <div className="p-4 pb-2 flex flex-col items-center">
           <Logo />
@@ -132,6 +132,7 @@ export const Sidebar = () => {
               matchPath="/"
             />
             <NavItem to="/packs" icon={Package} label="Packs" />
+            <NavItem to="/personalities" icon={User} label="Personalities" />
             <NavItem to="/voices" icon={Volume2} label="Voices" />
             <div className="grid grid-cols-3 gap-2 px-3 pb-3 w-full mt-3">
               <NavItem

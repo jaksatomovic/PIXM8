@@ -108,10 +108,6 @@ export const Addons = () => {
 
   return (
     <div>
-      <h2 className="text-3xl font-black mb-8 flex items-center gap-3">
-        <Package className="w-8 h-8" />
-        ADDONS
-      </h2>
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 font-bold rounded-[12px] flex items-center gap-2">

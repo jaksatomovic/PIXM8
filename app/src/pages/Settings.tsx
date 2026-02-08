@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package } from 'lucide-react';
+import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package, User, Volume2, Settings as SettingsIcon, Plus, Trash2, UserCircle } from 'lucide-react';
 import { ModelSwitchModal } from '../components/ModelSwitchModal';
 import { LlmSelector } from '../components/LlmSelector';
 import { Addons } from '../components/Addons';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { VoiceActionButtons } from '../components/VoiceActionButtons';
+import { useVoicePlayback } from '../hooks/useVoicePlayback';
 
 type ModelConfig = {
   llm: {
@@ -15,9 +17,377 @@ type ModelConfig = {
   };
 };
 
+type Profile = { id: string; name: string; voice_id: string; personality_id: string };
+
+function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
+  const navigate = useNavigate();
+  const [voices, setVoices] = useState<Array<{ voice_id: string; voice_name: string; voice_description?: string; is_downloaded?: boolean }>>([]);
+  const [personalities, setPersonalities] = useState<Array<{ id: string; name: string; short_description?: string }>>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [preferences, setPreferences] = useState<{
+    default_voice_id: string | null;
+    default_personality_id: string | null;
+    default_profile_id: string | null;
+    use_default_voice_everywhere: boolean;
+    allow_experience_voice_override: boolean;
+  }>({
+    default_voice_id: null,
+    default_personality_id: null,
+    default_profile_id: null,
+    use_default_voice_everywhere: true,
+    allow_experience_voice_override: false,
+  });
+  const [newProfileName, setNewProfileName] = useState('');
+  const [newProfileVoiceId, setNewProfileVoiceId] = useState('');
+  const [newProfilePersonalityId, setNewProfilePersonalityId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
+  const [downloadingVoiceId, setDownloadingVoiceId] = useState<string | null>(null);
+  const [audioSrcByVoiceId, setAudioSrcByVoiceId] = useState<Record<string, string>>({});
+
+  const { playingVoiceId, isPaused, toggle: toggleVoice } = useVoicePlayback(async (voiceId) => {
+    let src = audioSrcByVoiceId[voiceId];
+    if (!src) {
+      const b64 = await api.readVoiceBase64(voiceId);
+      if (!b64) return null;
+      src = `data:audio/wav;base64,${b64}`;
+      setAudioSrcByVoiceId((prev) => ({ ...prev, [voiceId]: src! }));
+    }
+    return src;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [voicesRes, personalitiesRes, prefsRes, downloadedRes] = await Promise.all([
+          api.getVoices(),
+          api.getExperiences(false, 'personality'),
+          api.getPreferences().catch(() => ({ default_voice_id: null, default_personality_id: null, use_default_voice_everywhere: true, allow_experience_voice_override: false })),
+          api.listDownloadedVoices(),
+        ]);
+        if (!cancelled) {
+          setVoices(Array.isArray(voicesRes) ? voicesRes : []);
+          setPersonalities(Array.isArray(personalitiesRes) ? personalitiesRes : []);
+          setProfiles(Array.isArray((prefsRes as any)?.profiles) ? (prefsRes as any).profiles : []);
+          setPreferences({
+            default_voice_id: (prefsRes as any)?.default_voice_id ?? null,
+            default_personality_id: (prefsRes as any)?.default_personality_id ?? null,
+            default_profile_id: (prefsRes as any)?.default_profile_id ?? null,
+            use_default_voice_everywhere: (prefsRes as any)?.use_default_voice_everywhere !== false,
+            allow_experience_voice_override: !!(prefsRes as any)?.allow_experience_voice_override,
+          });
+          setDownloadedVoiceIds(new Set(Array.isArray(downloadedRes) ? downloadedRes : []));
+        }
+      } catch (e) {
+        console.error('Personalization load failed', e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const savePreferences = async (updates: Partial<typeof preferences>) => {
+    setSaving(true);
+    try {
+      const next = { ...preferences, ...updates };
+      await api.setPreferences({
+        default_voice_id: next.default_voice_id ?? undefined,
+        default_personality_id: next.default_personality_id ?? undefined,
+        default_profile_id: next.default_profile_id ?? undefined,
+        use_default_voice_everywhere: next.use_default_voice_everywhere,
+        allow_experience_voice_override: next.allow_experience_voice_override,
+      });
+      setPreferences(next);
+    } catch (e: any) {
+      console.error('Save preferences failed', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const loadProfiles = async () => {
+    try {
+      const res = await api.getProfiles();
+      setProfiles(Array.isArray((res as any)?.profiles) ? (res as any).profiles : []);
+      const prefs = await api.getPreferences();
+      setPreferences((p) => ({ ...p, default_profile_id: (prefs as any)?.default_profile_id ?? null }));
+    } catch {
+      setProfiles([]);
+    }
+  };
+
+  const createProfile = async () => {
+    if (!newProfileName.trim() || !newProfileVoiceId || !newProfilePersonalityId) return;
+    setSaving(true);
+    try {
+      await api.createProfile({
+        name: newProfileName.trim(),
+        voice_id: newProfileVoiceId,
+        personality_id: newProfilePersonalityId,
+      });
+      setNewProfileName('');
+      setNewProfileVoiceId('');
+      setNewProfilePersonalityId('');
+      await loadProfiles();
+    } catch (e: any) {
+      console.error('Create profile failed', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setDefaultProfile = async (profileId: string) => {
+    await savePreferences({ default_profile_id: profileId });
+    await loadProfiles();
+  };
+
+  const deleteProfile = async (profileId: string) => {
+    setSaving(true);
+    try {
+      await api.deleteProfile(profileId);
+      await loadProfiles();
+    } catch (e: any) {
+      console.error('Delete profile failed', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const useProfileForSession = async (profileId: string) => {
+    try {
+      await api.setActiveSessionProfile(profileId);
+      try {
+        await api.setAppMode('chat');
+      } catch {
+        // non-blocking
+      }
+      navigate('/');
+    } catch (e: any) {
+      console.error('Use profile for session failed', e);
+    }
+  };
+
+  const downloadVoice = async (voiceId: string) => {
+    setDownloadingVoiceId(voiceId);
+    try {
+      await api.downloadVoice(voiceId);
+      setDownloadedVoiceIds((prev) => new Set(prev).add(voiceId));
+    } finally {
+      setDownloadingVoiceId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div>
+        {!embedded && <h2 className="text-3xl font-black flex items-center gap-3 mb-8">SETTINGS</h2>}
+        <div className="retro-card font-mono text-sm py-12 text-center text-[var(--color-retro-fg-secondary)]">Loading personalization…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {!embedded && (
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-black flex items-center gap-3">SETTINGS</h2>
+          <div className="flex gap-2">
+            <a href="/settings?tab=general" className="retro-btn retro-btn-outline text-sm">General</a>
+            <a href="/settings?tab=personalization" className="retro-btn retro-btn-outline text-sm bg-[var(--color-retro-accent-light)]">Personalization</a>
+            <a href="/settings?tab=addons" className="retro-btn retro-btn-outline text-sm flex items-center gap-2"><Package className="w-4 h-4" /> Addons</a>
+          </div>
+        </div>
+      )}
+      <div className="retro-card space-y-8">
+        <div className="space-y-4">
+          <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
+            <Volume2 className="w-5 h-5" />
+            Default Voice
+          </h3>
+          <p className="text-xs text-gray-600">Used for chat, stories, and games unless you allow experience override.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              className="retro-input flex-1 min-w-[200px]"
+              value={preferences.default_voice_id ?? ''}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                setPreferences((p) => ({ ...p, default_voice_id: v }));
+                savePreferences({ default_voice_id: v });
+              }}
+              disabled={saving}
+            >
+              <option value="">— Use first available —</option>
+              {voices.map((v) => (
+                <option key={v.voice_id} value={v.voice_id}>
+                  {v.voice_name} {!(v as any).is_downloaded && !downloadedVoiceIds.has(v.voice_id) ? '(download to use)' : ''}
+                </option>
+              ))}
+            </select>
+            {preferences.default_voice_id && (
+              <VoiceActionButtons
+                voiceId={preferences.default_voice_id}
+                isDownloaded={(voices.find((x) => x.voice_id === preferences.default_voice_id) as any)?.is_downloaded ?? downloadedVoiceIds.has(preferences.default_voice_id ?? '')}
+                downloadingVoiceId={downloadingVoiceId}
+                onDownload={downloadVoice}
+                onTogglePlay={(id) => toggleVoice(id)}
+                isPlaying={playingVoiceId === preferences.default_voice_id}
+                isPaused={isPaused}
+                size="small"
+              />
+            )}
+          </div>
+        </div>
+        <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
+          <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
+            <User className="w-5 h-5" />
+            Default Personality
+          </h3>
+          <p className="text-xs text-gray-600">Default character/mode for chat and sessions.</p>
+          <select
+            className="retro-input w-full max-w-md"
+            value={preferences.default_personality_id ?? ''}
+            onChange={(e) => {
+              const v = e.target.value || null;
+              setPreferences((p) => ({ ...p, default_personality_id: v }));
+              savePreferences({ default_personality_id: v });
+            }}
+            disabled={saving}
+          >
+            <option value="">— Use first available —</option>
+            {personalities.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
+          <h3 className="font-bold uppercase text-lg">Voice behavior</h3>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={preferences.use_default_voice_everywhere}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setPreferences((p) => ({ ...p, use_default_voice_everywhere: v }));
+                savePreferences({ use_default_voice_everywhere: v });
+              }}
+              className="retro-input w-4 h-4"
+            />
+            <span className="text-sm">Use default voice everywhere (chat, stories, games)</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={preferences.allow_experience_voice_override}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setPreferences((p) => ({ ...p, allow_experience_voice_override: v }));
+                savePreferences({ allow_experience_voice_override: v });
+              }}
+              className="retro-input w-4 h-4"
+            />
+            <span className="text-sm">Allow experience voice override (use personality/game/story voice when set)</span>
+          </label>
+        </div>
+
+        <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
+          <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
+            <UserCircle className="w-5 h-5" />
+            Profiles (voice + personality)
+          </h3>
+          <p className="text-xs text-gray-600">Save a voice + personality pair for the robot (e.g. Friendly Anna, Bossy Robot). Set one as default for device or use for this session.</p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <input
+              type="text"
+              placeholder="Profile name"
+              value={newProfileName}
+              onChange={(e) => setNewProfileName(e.target.value)}
+              className="retro-input w-40"
+            />
+            <select
+              className="retro-input w-40"
+              value={newProfileVoiceId}
+              onChange={(e) => setNewProfileVoiceId(e.target.value)}
+            >
+              <option value="">— Voice —</option>
+              {voices.map((v) => (
+                <option key={v.voice_id} value={v.voice_id}>{v.voice_name}</option>
+              ))}
+            </select>
+            <select
+              className="retro-input w-40"
+              value={newProfilePersonalityId}
+              onChange={(e) => setNewProfilePersonalityId(e.target.value)}
+            >
+              <option value="">— Personality —</option>
+              {personalities.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="retro-btn flex items-center gap-2"
+              onClick={createProfile}
+              disabled={saving || !newProfileName.trim() || !newProfileVoiceId || !newProfilePersonalityId}
+            >
+              <Plus size={16} /> Create
+            </button>
+          </div>
+          <ul className="space-y-2 mt-4">
+            {profiles.map((pr) => {
+              const voiceName = voices.find((v) => v.voice_id === pr.voice_id)?.voice_name ?? pr.voice_id;
+              const personalityName = personalities.find((p) => p.id === pr.personality_id)?.name ?? pr.personality_id;
+              const isDefault = preferences.default_profile_id === pr.id;
+              return (
+                <li key={pr.id} className="retro-card flex items-center justify-between gap-2 py-2 px-3">
+                  <span className="font-medium truncate">{pr.name}</span>
+                  <span className="text-xs text-gray-600 truncate">{voiceName} + {personalityName}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      className={`retro-btn retro-btn-outline text-xs ${isDefault ? 'opacity-100 font-bold' : ''}`}
+                      onClick={() => setDefaultProfile(pr.id)}
+                    >
+                      {isDefault ? 'Default' : 'Set as Default'}
+                    </button>
+                    <button
+                      type="button"
+                      className="retro-btn text-xs"
+                      onClick={() => useProfileForSession(pr.id)}
+                    >
+                      Use for session
+                    </button>
+                    <button
+                      type="button"
+                      className="retro-btn retro-btn-outline text-xs text-red-600"
+                      onClick={() => deleteProfile(pr.id)}
+                      title="Delete profile"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {profiles.length === 0 && (
+            <p className="text-sm text-gray-500">No profiles yet. Create one above to combine a voice with a personality for the robot.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const Settings = () => {
   const [searchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'general';
+  const tabRaw = searchParams.get('tab') || 'general';
+  const tab = ['general', 'personalization', 'addons'].includes(tabRaw) ? tabRaw : 'general';
   
   const [models, setModels] = useState<ModelConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,10 +536,6 @@ export const Settings = () => {
     setPendingModelRepo('');
   };
 
-  if (tab === 'addons') {
-    return <Addons />;
-  }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -177,22 +543,34 @@ export const Settings = () => {
           SETTINGS
         </h2>
         <div className="flex gap-2">
-          <a
-            href="/settings?tab=general"
-            className={`retro-btn retro-btn-outline text-sm ${tab === 'general' || !tab ? 'bg-[var(--color-retro-accent-light)]' : ''}`}
+          <Link
+            to="/settings?tab=general"
+            className={`retro-btn retro-btn-outline text-sm flex items-center gap-2 ${tab === 'general' ? 'bg-[var(--color-retro-accent-light)] border-[var(--color-retro-accent)] font-semibold' : ''}`}
           >
+            <SettingsIcon className="w-4 h-4" />
             General
-          </a>
-          <a
-            href="/settings?tab=addons"
-            className={`retro-btn retro-btn-outline text-sm flex items-center gap-2 ${tab === 'addons' ? 'bg-[var(--color-retro-accent-light)]' : ''}`}
+          </Link>
+          <Link
+            to="/settings?tab=personalization"
+            className={`retro-btn retro-btn-outline text-sm flex items-center gap-2 ${tab === 'personalization' ? 'bg-[var(--color-retro-accent-light)] border-[var(--color-retro-accent)] font-semibold' : ''}`}
+          >
+            <User className="w-4 h-4" />
+            Personalization
+          </Link>
+          <Link
+            to="/settings?tab=addons"
+            className={`retro-btn retro-btn-outline text-sm flex items-center gap-2 ${tab === 'addons' ? 'bg-[var(--color-retro-accent-light)] border-[var(--color-retro-accent)] font-semibold' : ''}`}
           >
             <Package className="w-4 h-4" />
             Addons
-          </a>
+          </Link>
         </div>
       </div>
-      
+
+      {tab === 'personalization' && <PersonalizationTab embedded />}
+      {tab === 'addons' && <Addons />}
+      {(tab === 'general' || !tab) && (
+        <>
       {error && (
         <div className="mb-6 p-4 rounded-[12px] font-bold" style={{ backgroundColor: 'rgba(229, 115, 115, 0.1)', border: '1px solid rgba(229, 115, 115, 0.3)', color: 'var(--color-retro-error)' }}>
           {error}
@@ -361,6 +739,8 @@ export const Settings = () => {
 
 
       </div>
+        </>
+      )}
 
       {/* Model Switch Modal */}
       <ModelSwitchModal
