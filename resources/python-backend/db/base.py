@@ -8,6 +8,7 @@ ALLOWED_TABLES = {
     "document_text",
     "documents",
     "personalities",
+    "profiles",
     "sessions",
     "users",
     "voices",

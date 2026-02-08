@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package, User, Volume2, Settings as SettingsIcon, Trash2, UserCircle } from 'lucide-react';
+import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package, User, Volume2, Settings as SettingsIcon, UserCircle } from 'lucide-react';
 import { ModelSwitchModal } from '../components/ModelSwitchModal';
 import { LlmSelector } from '../components/LlmSelector';
 import { Addons } from '../components/Addons';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { VoiceActionButtons } from '../components/VoiceActionButtons';
 import { useVoicePlayback } from '../hooks/useVoicePlayback';
 
@@ -20,7 +20,6 @@ type ModelConfig = {
 type Profile = { id: string; name: string; voice_id: string; personality_id: string };
 
 function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
-  const navigate = useNavigate();
   const [voices, setVoices] = useState<Array<{ voice_id: string; voice_name: string; voice_description?: string; is_downloaded?: boolean }>>([]);
   const [personalities, setPersonalities] = useState<Array<{ id: string; name: string; short_description?: string }>>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -39,7 +38,6 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
   const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
   const [downloadingVoiceId, setDownloadingVoiceId] = useState<string | null>(null);
   const [audioSrcByVoiceId, setAudioSrcByVoiceId] = useState<Record<string, string>>({});
@@ -59,16 +57,17 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const [voicesRes, personalitiesRes, prefsRes, downloadedRes] = await Promise.all([
+        const [voicesRes, personalitiesRes, prefsRes, downloadedRes, profilesRes] = await Promise.all([
           api.getVoices(),
           api.getExperiences(false, 'personality'),
           api.getPreferences().catch(() => ({ default_voice_id: null, default_personality_id: null, use_default_voice_everywhere: true, allow_experience_voice_override: false })),
           api.listDownloadedVoices(),
+          api.getProfiles().catch(() => ({ profiles: [] })),
         ]);
         if (!cancelled) {
           setVoices(Array.isArray(voicesRes) ? voicesRes : []);
           setPersonalities(Array.isArray(personalitiesRes) ? personalitiesRes : []);
-          setProfiles(Array.isArray((prefsRes as any)?.profiles) ? (prefsRes as any).profiles : []);
+          setProfiles(Array.isArray((profilesRes as any)?.profiles) ? (profilesRes as any).profiles : []);
           setPreferences({
             default_voice_id: (prefsRes as any)?.default_voice_id ?? null,
             default_personality_id: (prefsRes as any)?.default_personality_id ?? null,
@@ -123,34 +122,6 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
     await loadProfiles();
   };
 
-  const deleteProfile = async (profileId: string) => {
-    setProfileError(null);
-    setSaving(true);
-    try {
-      await api.deleteProfile(profileId);
-      await loadProfiles();
-    } catch (e: any) {
-      console.error('Delete profile failed', e);
-      setProfileError(e?.message || 'Failed to delete profile.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const useProfileForSession = async (profileId: string) => {
-    try {
-      await api.setActiveSessionProfile(profileId);
-      try {
-        await api.setAppMode('chat');
-      } catch {
-        // non-blocking
-      }
-      navigate('/');
-    } catch (e: any) {
-      console.error('Use profile for session failed', e);
-    }
-  };
-
   const downloadVoice = async (voiceId: string) => {
     setDownloadingVoiceId(voiceId);
     try {
@@ -177,7 +148,7 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
           <h2 className="text-3xl font-black flex items-center gap-3">SETTINGS</h2>
           <div className="flex gap-2">
             <a href="/settings?tab=general" className="retro-btn retro-btn-outline text-sm">General</a>
-            <a href="/settings?tab=personalization" className="retro-btn retro-btn-outline text-sm bg-[var(--color-retro-accent-light)]">Personalization</a>
+            <a href="/settings?tab=personalization" className="retro-btn retro-btn-outline text-sm bg-[var(--color-retro-accent-light)]">AI</a>
             <a href="/settings?tab=addons" className="retro-btn retro-btn-outline text-sm flex items-center gap-2"><Package className="w-4 h-4" /> Addons</a>
           </div>
         </div>
@@ -280,52 +251,24 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
             <UserCircle className="w-5 h-5" />
             Profiles (voice + personality)
           </h3>
-          <p className="text-xs text-gray-600">Manage profiles here. Create new profiles on the <a href="/profiles" className="underline font-medium">Profiles</a> page.</p>
-          {profileError && (
-            <div className="mt-2 p-3 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm flex items-start justify-between gap-2">
-              <span>{profileError}</span>
-              <button type="button" className="shrink-0 text-red-600 dark:text-red-400 hover:underline" onClick={() => setProfileError(null)} aria-label="Dismiss">×</button>
-            </div>
-          )}
-          <ul className="space-y-2 mt-4">
-            {profiles.map((pr) => {
-              const voiceName = voices.find((v) => v.voice_id === pr.voice_id)?.voice_name ?? pr.voice_id;
-              const personalityName = personalities.find((p) => p.id === pr.personality_id)?.name ?? pr.personality_id;
-              const isDefault = preferences.default_profile_id === pr.id;
-              return (
-                <li key={pr.id} className="retro-card flex items-center justify-between gap-2 py-2 px-3">
-                  <span className="font-medium truncate">{pr.name}</span>
-                  <span className="text-xs text-gray-600 truncate">{voiceName} + {personalityName}</span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      className={`retro-btn retro-btn-outline text-xs ${isDefault ? 'opacity-100 font-bold' : ''}`}
-                      onClick={() => setDefaultProfile(pr.id)}
-                    >
-                      {isDefault ? 'Default' : 'Set as Default'}
-                    </button>
-                    <button
-                      type="button"
-                      className="retro-btn text-xs"
-                      onClick={() => useProfileForSession(pr.id)}
-                    >
-                      Use for session
-                    </button>
-                    <button
-                      type="button"
-                      className="retro-btn retro-btn-outline text-xs text-red-600"
-                      onClick={() => deleteProfile(pr.id)}
-                      title="Delete profile"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          {profiles.length === 0 && (
+          <p className="text-xs text-gray-600">Set the default profile for the device. Create new profiles on the <a href="/profiles" className="underline font-medium">Profiles</a> page.</p>
+          {profiles.length === 0 ? (
             <p className="text-sm text-gray-500">No profiles yet. Create one on the <a href="/profiles" className="underline font-medium">Profiles</a> page.</p>
+          ) : (
+            <select
+              className="retro-input w-full max-w-md"
+              value={preferences.default_profile_id ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v) setDefaultProfile(v);
+              }}
+              disabled={saving}
+            >
+              <option value="">— Default profile —</option>
+              {profiles.map((pr) => (
+                <option key={pr.id} value={pr.id}>{pr.name}</option>
+              ))}
+            </select>
           )}
         </div>
       </div>
@@ -503,8 +446,8 @@ export const Settings = () => {
             to="/settings?tab=personalization"
             className={`retro-btn retro-btn-outline text-sm flex items-center gap-2 ${tab === 'personalization' ? 'bg-[var(--color-retro-accent-light)] border-[var(--color-retro-accent)] font-semibold' : ''}`}
           >
-            <User className="w-4 h-4" />
-            Personalization
+            <Brain className="w-4 h-4" />
+            AI
           </Link>
           <Link
             to="/settings?tab=addons"

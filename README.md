@@ -122,7 +122,7 @@ The **Home** page has three tabs: **Docs**, **Games**, and **Chat**. The **Docs*
 
 - **PDF** — Text is extracted with pypdf and included in context (no OCR).
 - **Plain text** (`.txt`, `.md`, `.json`, `.csv`) — Content is read as UTF-8 and stored for context.
-- **Images** — Stored and listed; no OCR in MVP (metadata only).
+- **Images** — Text is extracted via OCR (Tesseract) when available and stored for context. Install Tesseract (e.g. `brew install tesseract` on macOS) for image OCR.
 - **Word** (`.doc`, `.docx`) — Stored; no text extraction in MVP.
 
 Total document context sent to the model is capped (e.g. 20k characters) to stay within limits.

@@ -97,6 +97,17 @@ class Session:
 
 
 @dataclass
+class Profile:
+    """User profile: named voice + personality pair."""
+    id: str
+    user_id: str
+    name: str
+    voice_id: str
+    personality_id: str
+    created_at: Optional[float] = None
+
+
+@dataclass
 class Document:
     id: str
     filename: str

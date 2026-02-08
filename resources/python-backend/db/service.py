@@ -9,6 +9,7 @@ from .documents import DocumentsMixin
 from .paths import resolve_db_path
 from .schema import init_schema
 from .personalities import PersonalitiesMixin
+from .profiles import ProfilesMixin
 from .seeds import SeedMixin
 from .sessions import SessionsMixin
 from .settings import SettingsMixin
@@ -26,6 +27,7 @@ class DBService(
     DocumentsMixin,
     VoicesMixin,
     PersonalitiesMixin,
+    ProfilesMixin,
     UsersMixin,
     SessionsMixin,
     ConversationsMixin,

@@ -1,7 +1,7 @@
 """Schema creation and migrations. Uses app_state.schema_version for versioning."""
 from sqlite3 import Connection
 
-TARGET_SCHEMA_VERSION = 5
+TARGET_SCHEMA_VERSION = 6
 
 
 def _column_exists(conn: Connection, table: str, column: str) -> bool:
@@ -134,6 +134,10 @@ def run_migrations(conn: Connection) -> None:
         elif current == 4:
             _migrate_v4_to_v5(conn)
             current = 5
+            set_schema_version(conn, current)
+        elif current == 5:
+            _migrate_v5_to_v6(conn)
+            current = 6
             set_schema_version(conn, current)
         else:
             break
@@ -307,6 +311,63 @@ def _migrate_v4_to_v5(conn: Connection) -> None:
             conn.execute("CREATE INDEX idx_conversation_documents_conversation_id ON conversation_documents(conversation_id)")
         if not _index_exists(conn, "idx_conversation_documents_doc_id"):
             conn.execute("CREATE INDEX idx_conversation_documents_doc_id ON conversation_documents(doc_id)")
+
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def _migrate_v5_to_v6(conn: Connection) -> None:
+    """Add profiles table; migrate profiles from users.settings_json into table."""
+    import json
+    import time
+    conn.rollback()
+    conn.execute("BEGIN TRANSACTION")
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profiles (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              name TEXT NOT NULL,
+              voice_id TEXT NOT NULL,
+              personality_id TEXT NOT NULL,
+              created_at REAL,
+              FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            """
+        )
+        if not _index_exists(conn, "idx_profiles_user_id"):
+            conn.execute("CREATE INDEX idx_profiles_user_id ON profiles(user_id)")
+
+        # Data migration: move profiles from settings_json into profiles table
+        cur = conn.execute("SELECT id, settings_json FROM users WHERE settings_json IS NOT NULL AND settings_json != ''")
+        for row in cur.fetchall():
+            user_id = row["id"]
+            try:
+                prefs = json.loads(row["settings_json"] or "{}")
+            except (TypeError, ValueError):
+                continue
+            profiles_data = prefs.get("profiles")
+            if not isinstance(profiles_data, list) or len(profiles_data) == 0:
+                continue
+            for pr in profiles_data:
+                pid = pr.get("id") if isinstance(pr, dict) else None
+                name = pr.get("name") if isinstance(pr, dict) else ""
+                voice_id = pr.get("voice_id") if isinstance(pr, dict) else ""
+                personality_id = pr.get("personality_id") if isinstance(pr, dict) else ""
+                if not pid or not name or not voice_id or not personality_id:
+                    continue
+                created_at = time.time()
+                conn.execute(
+                    "INSERT OR IGNORE INTO profiles (id, user_id, name, voice_id, personality_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (str(pid), user_id, (str(name))[:80], str(voice_id), str(personality_id), created_at),
+                )
+            # Remove profiles from settings_json, keep rest (including default_profile_id)
+            prefs.pop("profiles", None)
+            new_json = json.dumps(prefs)
+            conn.execute("UPDATE users SET settings_json = ? WHERE id = ?", (new_json, user_id))
 
         conn.execute("COMMIT")
     except Exception:
