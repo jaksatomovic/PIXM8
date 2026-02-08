@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useActiveUser } from '../state/ActiveUserContext';
-import { MessageCircle, Package, Star, User } from 'lucide-react';
+import { Package, Star, User } from 'lucide-react';
 
 type Personality = {
   id: string;
@@ -57,7 +57,9 @@ export const PersonalitiesPage = () => {
         ]);
         if (!cancelled) {
           setPersonalities(Array.isArray(exps) ? exps : []);
-          setPreferences({ default_personality_id: (prefs as any)?.default_personality_id ?? null });
+          setPreferences({
+            default_personality_id: (prefs as any)?.default_personality_id ?? null,
+          });
           if (active) {
             setActiveSession({
               session_id: active?.session_id ?? null,
@@ -93,7 +95,7 @@ export const PersonalitiesPage = () => {
   const setAsDefault = async (personalityId: string) => {
     try {
       await api.setPreferences({ default_personality_id: personalityId });
-      setPreferences({ default_personality_id: personalityId });
+      setPreferences((p) => ({ ...p, default_personality_id: personalityId }));
       await loadActiveSession();
     } catch (e: any) {
       console.error('Set default failed', e);
@@ -124,7 +126,7 @@ export const PersonalitiesPage = () => {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-black flex items-center gap-3">
-          <MessageCircle className="w-7 h-7" />
+          <User className="w-7 h-7" />
           Personalities
         </h1>
         <div className="retro-card font-mono text-sm py-12 text-center text-[var(--color-retro-fg-secondary)]">
@@ -138,7 +140,7 @@ export const PersonalitiesPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-black flex items-center gap-3">
-          <MessageCircle className="w-7 h-7" />
+          <User className="w-7 h-7" />
           Personalities
         </h1>
         <Link

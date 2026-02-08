@@ -4,17 +4,21 @@ import { useActiveUser } from '../state/ActiveUserContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useEffect, useState } from 'react';
-import { Bot, X, RefreshCw } from 'lucide-react';
+import { Bot, X, RefreshCw, CircleFadingPlus, Plus } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { VoiceWsProvider, useVoiceWs } from '../state/VoiceWsContext';
+import { useDocsContextOptional } from '../state/DocsContext';
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 
 const LayoutInner = () => {
-  const { activeUser, refreshUsers } = useActiveUser();
+  const { activeUser } = useActiveUser();
   const location = useLocation();
   const navigate = useNavigate();
   const voiceWs = useVoiceWs();
+  const docsContext = useDocsContextOptional();
+  const selectedDocsMeta = docsContext?.selectedDocsMeta ?? [];
+  const removeDoc = docsContext?.removeDoc;
   const [activePersonalityName, setActivePersonalityName] = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState<{
     active_personality_id: string | null;
@@ -31,6 +35,7 @@ const LayoutInner = () => {
   // Network monitoring
   const [initialIp, setInitialIp] = useState<string | null>(null);
   const [showNetworkBanner, setShowNetworkBanner] = useState(false);
+  const [showContextBar, setShowContextBar] = useState(false);
 
   const GLOBAL_PERSONALITY_IMAGE_BASE_URL = 'https://pub-a64cd21521e44c81a85db631f1cdaacc.r2.dev';
 
@@ -268,8 +273,44 @@ const LayoutInner = () => {
           </div>
 
         {(activeSession?.active_personality_id ?? activeUser?.current_personality_id) && (
-          <div className="fixed bottom-0 z-20 left-64 right-0 pointer-events-none">
-            <div className="max-w-4xl mx-auto px-8 pb-6 pointer-events-auto">
+          <div className="fixed bottom-0 z-20 left-[17rem] right-0 pointer-events-none">
+            <div className="max-w-4xl mx-auto px-8 pb-6 pointer-events-auto space-y-2">
+              {showContextBar && (
+                <div className="retro-card rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1 shrink-0">
+                      <CircleFadingPlus size={14} /> Context
+                    </span>
+                    {selectedDocsMeta.map((d) => (
+                      <span
+                        key={d.id}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-sm"
+                      >
+                        <span className="truncate max-w-[180px]" title={d.title || d.filename}>
+                          {d.title?.trim() || d.filename || d.id}
+                        </span>
+                        {removeDoc && (
+                          <button
+                            type="button"
+                            className="shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                            onClick={() => removeDoc(d.id)}
+                            aria-label="Remove from context"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="retro-btn text-xs py-1.5 px-2 flex items-center gap-1 shrink-0"
+                    onClick={() => navigate('/?tab=docs')}
+                  >
+                    <Plus size={12} /> Add Docs
+                  </button>
+                </div>
+              )}
               <div className="retro-card rounded-full px-5 py-4 flex items-center justify-between">
                 <div className="min-w-0 flex items-center gap-4">
                   {activePersonalityImageSrc && !activePersonalityImageError && (
@@ -293,46 +334,30 @@ const LayoutInner = () => {
 
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col items-end gap-2">
-                    {activeSession?.active_personality_id != null &&
-                      activeSession?.active_personality_id !== activeSession?.default_personality_id &&
-                      !localActive &&
-                      !deviceConnected && (
-                        <button
-                          type="button"
-                          className="retro-btn retro-btn-outline no-lift px-3 py-1.5 text-xs"
-                          onClick={async () => {
-                            try {
-                              await api.resetActiveSessionToDefault();
-                              await refreshUsers();
-                              const data = await api.getActiveSession().catch(() => null);
-                              if (data)
-                                setActiveSession({
-                                  active_personality_id: data?.active_personality_id ?? null,
-                                  default_personality_id: data?.default_personality_id ?? null,
-                                  active_personality_name: data?.active_personality_name ?? null,
-                                });
-                            } catch {
-                              // ignore
-                            }
-                          }}
-                        >
-                          Reset to Default
-                        </button>
-                      )}
-                    {!localActive && !deviceConnected && (
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        className="retro-btn retro-btn-purple no-lift px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                        onClick={() => {
-                          if (!canStartChat) return;
-                          navigate('/test');
-                          voiceWs.connect();
-                        }}
-                        disabled={!canStartChat}
+                        className={`no-lift px-3 py-1.5 text-xs flex items-center gap-1.5 ${showContextBar ? 'retro-btn' : 'retro-btn retro-btn-outline'}`}
+                        onClick={() => setShowContextBar((v) => !v)}
+                        title={showContextBar ? 'Hide context' : 'Show context (attached docs)'}
                       >
-                        <Bot size={18} className="shrink-0" /> Preview
+                        <CircleFadingPlus size={14} /> Context
                       </button>
-                    )}
+                      {!localActive && !deviceConnected && (
+                        <button
+                          type="button"
+                          className="retro-btn retro-btn-purple no-lift px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                          onClick={() => {
+                            if (!canStartChat) return;
+                            navigate('/test');
+                            voiceWs.connect();
+                          }}
+                          disabled={!canStartChat}
+                        >
+                          <Bot size={18} className="shrink-0" /> Preview
+                        </button>
+                      )}
+                    </div>
                     {!localActive && deviceConnected && !isEsp32View && (
                       <button
                         type="button"

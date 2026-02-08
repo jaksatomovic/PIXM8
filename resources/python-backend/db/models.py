@@ -94,3 +94,27 @@ class Session:
     client_type: str
     user_id: Optional[str]
     personality_id: Optional[str]
+
+
+@dataclass
+class Document:
+    id: str
+    filename: str
+    title: Optional[str]
+    ext: str
+    mime: str
+    doc_type: str
+    size_bytes: int
+    sha256: str
+    local_path: str
+    created_at: float
+    updated_at: Optional[float]
+    is_deleted: int = 0
+
+
+@dataclass
+class DocumentText:
+    doc_id: str
+    extracted_text: Optional[str]
+    extracted_at: Optional[float]
+    extractor: Optional[str]

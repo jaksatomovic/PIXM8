@@ -1,7 +1,7 @@
 """Schema creation and migrations. Uses app_state.schema_version for versioning."""
 from sqlite3 import Connection
 
-TARGET_SCHEMA_VERSION = 4
+TARGET_SCHEMA_VERSION = 5
 
 
 def _column_exists(conn: Connection, table: str, column: str) -> bool:
@@ -131,6 +131,10 @@ def run_migrations(conn: Connection) -> None:
             _migrate_v3_to_v4(conn)
             current = 4
             set_schema_version(conn, current)
+        elif current == 4:
+            _migrate_v4_to_v5(conn)
+            current = 5
+            set_schema_version(conn, current)
         else:
             break
 
@@ -240,6 +244,70 @@ def _migrate_v3_to_v4(conn: Connection) -> None:
     try:
         if not _column_exists(conn, "users", "current_voice_id"):
             conn.execute("ALTER TABLE users ADD COLUMN current_voice_id TEXT")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def _migrate_v4_to_v5(conn: Connection) -> None:
+    """Add documents, document_text, conversation_documents for Docs Library."""
+    conn.rollback()
+    conn.execute("BEGIN TRANSACTION")
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS documents (
+              id TEXT PRIMARY KEY,
+              filename TEXT NOT NULL,
+              title TEXT,
+              ext TEXT NOT NULL,
+              mime TEXT NOT NULL,
+              doc_type TEXT NOT NULL,
+              size_bytes INTEGER NOT NULL,
+              sha256 TEXT NOT NULL,
+              local_path TEXT NOT NULL,
+              created_at REAL NOT NULL,
+              updated_at REAL,
+              is_deleted INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        if not _index_exists(conn, "idx_documents_type"):
+            conn.execute("CREATE INDEX idx_documents_type ON documents(doc_type)")
+        if not _index_exists(conn, "idx_documents_filename"):
+            conn.execute("CREATE INDEX idx_documents_filename ON documents(filename)")
+        if not _index_exists(conn, "idx_documents_created_at"):
+            conn.execute("CREATE INDEX idx_documents_created_at ON documents(created_at)")
+        if not _index_exists(conn, "idx_documents_sha256"):
+            conn.execute("CREATE INDEX idx_documents_sha256 ON documents(sha256)")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS document_text (
+              doc_id TEXT PRIMARY KEY,
+              extracted_text TEXT,
+              extracted_at REAL,
+              extractor TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS conversation_documents (
+              conversation_id TEXT NOT NULL,
+              doc_id TEXT NOT NULL,
+              added_at REAL NOT NULL,
+              PRIMARY KEY (conversation_id, doc_id)
+            )
+            """
+        )
+        if not _index_exists(conn, "idx_conversation_documents_conversation_id"):
+            conn.execute("CREATE INDEX idx_conversation_documents_conversation_id ON conversation_documents(conversation_id)")
+        if not _index_exists(conn, "idx_conversation_documents_doc_id"):
+            conn.execute("CREATE INDEX idx_conversation_documents_doc_id ON conversation_documents(doc_id)")
+
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package, User, Volume2, Settings as SettingsIcon, Plus, Trash2, UserCircle } from 'lucide-react';
+import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package, User, Volume2, Settings as SettingsIcon, Trash2, UserCircle } from 'lucide-react';
 import { ModelSwitchModal } from '../components/ModelSwitchModal';
 import { LlmSelector } from '../components/LlmSelector';
 import { Addons } from '../components/Addons';
@@ -37,11 +37,9 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
     use_default_voice_everywhere: true,
     allow_experience_voice_override: false,
   });
-  const [newProfileName, setNewProfileName] = useState('');
-  const [newProfileVoiceId, setNewProfileVoiceId] = useState('');
-  const [newProfilePersonalityId, setNewProfilePersonalityId] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
   const [downloadingVoiceId, setDownloadingVoiceId] = useState<string | null>(null);
   const [audioSrcByVoiceId, setAudioSrcByVoiceId] = useState<Record<string, string>>({});
@@ -120,38 +118,20 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
     }
   };
 
-  const createProfile = async () => {
-    if (!newProfileName.trim() || !newProfileVoiceId || !newProfilePersonalityId) return;
-    setSaving(true);
-    try {
-      await api.createProfile({
-        name: newProfileName.trim(),
-        voice_id: newProfileVoiceId,
-        personality_id: newProfilePersonalityId,
-      });
-      setNewProfileName('');
-      setNewProfileVoiceId('');
-      setNewProfilePersonalityId('');
-      await loadProfiles();
-    } catch (e: any) {
-      console.error('Create profile failed', e);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const setDefaultProfile = async (profileId: string) => {
     await savePreferences({ default_profile_id: profileId });
     await loadProfiles();
   };
 
   const deleteProfile = async (profileId: string) => {
+    setProfileError(null);
     setSaving(true);
     try {
       await api.deleteProfile(profileId);
       await loadProfiles();
     } catch (e: any) {
       console.error('Delete profile failed', e);
+      setProfileError(e?.message || 'Failed to delete profile.');
     } finally {
       setSaving(false);
     }
@@ -300,44 +280,13 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
             <UserCircle className="w-5 h-5" />
             Profiles (voice + personality)
           </h3>
-          <p className="text-xs text-gray-600">Save a voice + personality pair for the robot (e.g. Friendly Anna, Bossy Robot). Set one as default for device or use for this session.</p>
-          <div className="flex flex-wrap gap-2 items-end">
-            <input
-              type="text"
-              placeholder="Profile name"
-              value={newProfileName}
-              onChange={(e) => setNewProfileName(e.target.value)}
-              className="retro-input w-40"
-            />
-            <select
-              className="retro-input w-40"
-              value={newProfileVoiceId}
-              onChange={(e) => setNewProfileVoiceId(e.target.value)}
-            >
-              <option value="">— Voice —</option>
-              {voices.map((v) => (
-                <option key={v.voice_id} value={v.voice_id}>{v.voice_name}</option>
-              ))}
-            </select>
-            <select
-              className="retro-input w-40"
-              value={newProfilePersonalityId}
-              onChange={(e) => setNewProfilePersonalityId(e.target.value)}
-            >
-              <option value="">— Personality —</option>
-              {personalities.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="retro-btn flex items-center gap-2"
-              onClick={createProfile}
-              disabled={saving || !newProfileName.trim() || !newProfileVoiceId || !newProfilePersonalityId}
-            >
-              <Plus size={16} /> Create
-            </button>
-          </div>
+          <p className="text-xs text-gray-600">Manage profiles here. Create new profiles on the <a href="/profiles" className="underline font-medium">Profiles</a> page.</p>
+          {profileError && (
+            <div className="mt-2 p-3 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm flex items-start justify-between gap-2">
+              <span>{profileError}</span>
+              <button type="button" className="shrink-0 text-red-600 dark:text-red-400 hover:underline" onClick={() => setProfileError(null)} aria-label="Dismiss">×</button>
+            </div>
+          )}
           <ul className="space-y-2 mt-4">
             {profiles.map((pr) => {
               const voiceName = voices.find((v) => v.voice_id === pr.voice_id)?.voice_name ?? pr.voice_id;
@@ -376,7 +325,7 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
             })}
           </ul>
           {profiles.length === 0 && (
-            <p className="text-sm text-gray-500">No profiles yet. Create one above to combine a voice with a personality for the robot.</p>
+            <p className="text-sm text-gray-500">No profiles yet. Create one on the <a href="/profiles" className="underline font-medium">Profiles</a> page.</p>
           )}
         </div>
       </div>

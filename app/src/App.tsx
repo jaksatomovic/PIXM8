@@ -13,6 +13,7 @@ import { SetupPage } from "./pages/Setup";
 import { ModelSetupPage } from "./pages/ModelSetup";
 import { VoicesPage } from "./pages/Voices";
 import { PersonalitiesPage } from "./pages/Personalities";
+import { ProfilesPage } from "./pages/Profiles";
 import { api } from "./api";
 import { STARTUP_DEFAULT_MESSAGE } from "./constants";
 import "./App.css";
@@ -101,11 +102,13 @@ function SetupGate() {
 }
 
 import { ActiveUserProvider } from "./state/ActiveUserContext";
+import { DocsProvider } from "./state/DocsContext";
 import { Logo } from "./components/Logo";
 
 function App() {
   return (
     <ActiveUserProvider>
+      <DocsProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/setup" element={<SetupPage />} />
@@ -115,6 +118,7 @@ function App() {
             <Route index element={<Playground />} />
             <Route path="playground" element={<Playground />} />
             <Route path="packs" element={<PacksPage />} />
+            <Route path="profiles" element={<ProfilesPage />} />
             <Route path="personalities" element={<PersonalitiesPage />} />
             <Route path="voices" element={<VoicesPage />} />
             <Route path="users" element={<UsersPage />} />
@@ -127,6 +131,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </DocsProvider>
     </ActiveUserProvider>
   );
 }

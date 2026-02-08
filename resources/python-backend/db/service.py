@@ -5,6 +5,7 @@ from .base import BaseDB
 from .addons import AddonsMixin
 from .conversations import ConversationsMixin
 from .devices import DeviceMixin
+from .documents import DocumentsMixin
 from .paths import resolve_db_path
 from .schema import init_schema
 from .personalities import PersonalitiesMixin
@@ -22,6 +23,7 @@ class DBService(
     AddonsMixin,
     SettingsMixin,
     DeviceMixin,
+    DocumentsMixin,
     VoicesMixin,
     PersonalitiesMixin,
     UsersMixin,

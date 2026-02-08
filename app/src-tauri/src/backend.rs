@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
 
-use crate::paths::{get_keero_dir, get_images_dir, get_venv_python, get_voices_dir};
+use crate::paths::{get_keero_dir, get_docs_dir, get_images_dir, get_venv_python, get_voices_dir};
 
 pub struct ApiProcess(pub Mutex<Option<Child>>);
 
@@ -96,6 +96,7 @@ pub async fn start_backend(app: AppHandle) -> Result<String, String> {
     let keero_db_path = get_keero_dir(&app).join("keero.db");
     let keero_voices_dir = get_voices_dir(&app);
     let keero_images_dir = get_images_dir(&app);
+    let keero_docs_dir = get_docs_dir(&app);
 
     ensure_port_free(8000);
 
@@ -111,6 +112,7 @@ pub async fn start_backend(app: AppHandle) -> Result<String, String> {
         .env("KEERO_DB_PATH", keero_db_path.to_string_lossy().to_string())
         .env("KEERO_VOICES_DIR", keero_voices_dir.to_string_lossy().to_string())
         .env("KEERO_IMAGES_DIR", keero_images_dir.to_string_lossy().to_string())
+        .env("KEERO_DOCS_DIR", keero_docs_dir.to_string_lossy().to_string())
         .env("TOKENIZERS_PARALLELISM", "false")
         .env("HF_HUB_DISABLE_XET", "1")
         .env("HF_HUB_ENABLE_HF_TRANSFER", "1")
@@ -159,6 +161,7 @@ pub fn setup_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
     let keero_db_path = get_keero_dir(&app_handle).join("keero.db");
     let keero_voices_dir = get_voices_dir(&app_handle);
     let keero_images_dir = get_images_dir(&app_handle);
+    let keero_docs_dir = get_docs_dir(&app_handle);
     println!("[TAURI] DB Path: {:?}", keero_db_path);
 
     let child = Command::new(&python_path)
@@ -173,6 +176,7 @@ pub fn setup_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
         .env("KEERO_DB_PATH", keero_db_path.to_string_lossy().to_string())
         .env("KEERO_VOICES_DIR", keero_voices_dir.to_string_lossy().to_string())
         .env("KEERO_IMAGES_DIR", keero_images_dir.to_string_lossy().to_string())
+        .env("KEERO_DOCS_DIR", keero_docs_dir.to_string_lossy().to_string())
         .env("TOKENIZERS_PARALLELISM", "false")
         .env("HF_HUB_DISABLE_XET", "1")
         .env("HF_HUB_ENABLE_HF_TRANSFER", "1")

@@ -16,6 +16,10 @@ pub(crate) fn get_images_dir(app: &AppHandle) -> PathBuf {
     get_keero_dir(app).join("images")
 }
 
+pub(crate) fn get_docs_dir(app: &AppHandle) -> PathBuf {
+    get_keero_dir(app).join("Docs")
+}
+
 pub(crate) fn get_venv_path(app: &AppHandle) -> PathBuf {
     get_keero_dir(app).join("python_env")
 }

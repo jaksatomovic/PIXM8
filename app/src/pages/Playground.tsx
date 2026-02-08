@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { Image as ImageIcon, Pencil, Trash2, MessageCircle, Maximize2, Gamepad2, Package } from 'lucide-react';
+import { Image as ImageIcon, Pencil, Trash2, MessageCircle, Maximize2, Gamepad2, FileText } from 'lucide-react';
 import { useActiveUser } from '../state/ActiveUserContext';
 import { ExperienceModal, ExperienceForModal } from '../components/ExperienceModal';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -8,17 +8,17 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { VoiceActionButtons } from '../components/VoiceActionButtons';
 import { useVoicePlayback } from '../hooks/useVoicePlayback';
 import { Modal } from '../components/Modal';
-import { PacksPage } from './PacksPage';
+import { DocsTab } from './DocsTab';
 
-type ExperienceType = 'personality' | 'game' | 'story' | 'packs';
+type ExperienceType = 'personality' | 'game' | 'story' | 'docs';
 
 const TAB_CONFIG: { id: ExperienceType; label: string; icon: typeof MessageCircle }[] = [
-  { id: 'packs', label: 'Packs', icon: Package },
+  { id: 'docs', label: 'Docs', icon: FileText },
   { id: 'game', label: 'Games', icon: Gamepad2 },
   { id: 'personality', label: 'Chat', icon: MessageCircle },
 ];
 
-const VALID_TABS: ExperienceType[] = ['personality', 'game', 'packs'];
+const VALID_TABS: ExperienceType[] = ['personality', 'game', 'docs'];
 
 export const Playground = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -82,7 +82,7 @@ export const Playground = () => {
   };
 
   const load = async () => {
-    if (activeTab === 'packs') {
+    if (activeTab === 'docs') {
       setLoading(false);
       return;
     }
@@ -286,10 +286,10 @@ export const Playground = () => {
       </div>
 
       <ExperienceModal 
-        open={modalOpen && activeTab !== 'packs'}
+        open={modalOpen && activeTab !== 'docs'}
         mode={modalMode}
         experience={selectedExperience}
-        experienceType={activeTab === 'packs' ? 'personality' : activeTab}
+        experienceType={activeTab === 'docs' ? 'personality' : activeTab}
         onClose={() => setModalOpen(false)}
         onSuccess={async () => {
           await load();
@@ -341,8 +341,8 @@ style={{
         </div>
       </Modal>
 
-      {activeTab === 'packs' ? (
-        <PacksPage />
+      {activeTab === 'docs' ? (
+        <DocsTab />
       ) : (
         <>
       {!activeUserId && !loading && (

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { api } from "../api";
 import { useActiveUser } from "./ActiveUserContext";
+import { useDocsContextOptional } from "./DocsContext";
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
@@ -49,6 +50,10 @@ export const useVoiceWs = () => {
 
 export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => {
   const { activeUser } = useActiveUser();
+  const docsContext = useDocsContextOptional();
+  const selectedDocIds = docsContext?.selectedDocIds ?? new Set<string>();
+  const selectedDocIdsRef = useRef(selectedDocIds);
+  selectedDocIdsRef.current = selectedDocIds;
 
   const [status, setStatus] = useState<Status>("disconnected");
   const [error, setError] = useState<string | null>(null);
@@ -514,6 +519,17 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
         } else if (msg.type === "session_started") {
           setLatestSessionId(msg.session_id || null);
           setTranscript([]);
+          try {
+            const ws = wsRef.current;
+            if (ws?.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: "config",
+                doc_ids: Array.from(selectedDocIdsRef.current),
+              }));
+            }
+          } catch {
+            // ignore
+          }
         } else if (msg.type === "transcription") {
           if (msg.text) {
             const entry: TranscriptEntry = {
@@ -582,16 +598,26 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
     load();
   }, [activeUser?.current_personality_id]);
 
+  const docIdsKey = useMemo(
+    () => Array.from(selectedDocIds).sort().join(","),
+    [selectedDocIds]
+  );
+
   useEffect(() => {
     if (!configReady) return;
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     try {
-      ws.send(JSON.stringify({ type: "config", voice, system_prompt: systemPrompt }));
+      ws.send(JSON.stringify({
+        type: "config",
+        voice,
+        system_prompt: systemPrompt,
+        doc_ids: Array.from(selectedDocIds),
+      }));
     } catch {
       // ignore
     }
-  }, [voice, systemPrompt, configReady]);
+  }, [voice, systemPrompt, configReady, docIdsKey, selectedDocIds]);
 
   useEffect(() => {
     return () => {

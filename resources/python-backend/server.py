@@ -553,6 +553,223 @@ async def delete_profile(profile_id: str):
     return {"profiles": profiles}
 
 
+# --- Docs Library ---
+
+import hashlib
+from fastapi import UploadFile, File as FileParam
+
+MAX_DOC_UPLOAD_BYTES = 50 * 1024 * 1024  # 50MB
+
+MIME_TO_DOC_TYPE = {
+    "application/pdf": "pdf",
+    "text/plain": "text",
+    "text/markdown": "text",
+    "text/csv": "text",
+    "application/json": "text",
+    "image/jpeg": "image",
+    "image/png": "image",
+    "image/gif": "image",
+    "image/webp": "image",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doc",
+}
+
+EXT_TO_DOC_TYPE = {
+    "pdf": "pdf",
+    "txt": "text",
+    "md": "text",
+    "csv": "text",
+    "json": "text",
+    "jpg": "image",
+    "jpeg": "image",
+    "png": "image",
+    "gif": "image",
+    "webp": "image",
+    "doc": "doc",
+    "docx": "doc",
+}
+
+
+def _detect_mime_and_type(filename: str, content_type: Optional[str]) -> tuple:
+    ext = (filename.rsplit(".", 1)[-1].lower() if "." in filename else "") or ""
+    mime = (content_type or "").split(";")[0].strip().lower() or "application/octet-stream"
+    doc_type = MIME_TO_DOC_TYPE.get(mime) or EXT_TO_DOC_TYPE.get(ext) or "other"
+    if doc_type == "other" and ext:
+        doc_type = EXT_TO_DOC_TYPE.get(ext, "other")
+    return mime, doc_type
+
+
+def _extract_text_from_doc(doc_id: str, local_path: Path, mime: str, doc_type: str) -> Optional[str]:
+    """Extract text for context. Returns None for images (no OCR in MVP)."""
+    try:
+        if doc_type == "text":
+            with open(local_path, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
+        if doc_type == "pdf":
+            try:
+                from pypdf import PdfReader
+                reader = PdfReader(str(local_path))
+                parts = []
+                for page in reader.pages:
+                    t = page.extract_text()
+                    if t:
+                        parts.append(t)
+                return "\n\n".join(parts) if parts else None
+            except Exception:
+                return None
+        if doc_type in ("image", "other", "doc"):
+            return None
+        with open(local_path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except Exception:
+        return None
+
+
+@app.post("/docs/upload")
+async def docs_upload(file: UploadFile = FileParam(...)):
+    """Upload a document. Max 50MB. Stores under AppData/Docs/{doc_id}/original.ext."""
+    content = await file.read()
+    if len(content) > MAX_DOC_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+    filename = file.filename or "unnamed"
+    if isinstance(filename, bytes):
+        filename = filename.decode("utf-8", errors="replace")
+    mime, doc_type = _detect_mime_and_type(filename, file.content_type)
+    sha256 = hashlib.sha256(content).hexdigest()
+    doc_id = str(uuid.uuid4())
+    ext = (filename.rsplit(".", 1)[-1].lower() if "." in filename else "") or "bin"
+    docs_root = _docs_dir()
+    doc_dir = docs_root / doc_id
+    doc_dir.mkdir(parents=True, exist_ok=True)
+    local_path = doc_dir / f"original.{ext}"
+    local_path.write_bytes(content)
+    local_path_str = str(local_path.resolve())
+    doc = db_service.db_service.insert_document(
+        doc_id=doc_id,
+        filename=filename,
+        ext=ext,
+        mime=mime,
+        doc_type=doc_type,
+        size_bytes=len(content),
+        sha256=sha256,
+        local_path=local_path_str,
+    )
+    extracted = _extract_text_from_doc(doc_id, local_path, mime, doc_type)
+    db_service.db_service.insert_document_text(
+        doc_id=doc_id,
+        extracted_text=extracted,
+        extractor="server",
+    )
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "title": doc.title,
+        "ext": doc.ext,
+        "mime": doc.mime,
+        "doc_type": doc.doc_type,
+        "size_bytes": doc.size_bytes,
+        "sha256": doc.sha256,
+        "local_path": doc.local_path,
+        "created_at": doc.created_at,
+        "has_text": extracted is not None and len((extracted or "").strip()) > 0,
+    }
+
+
+@app.get("/docs/list")
+async def docs_list(
+    q: Optional[str] = Query(None),
+    type: Optional[str] = Query(None, alias="type"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """List documents (excludes soft-deleted). Filter by type, search filename/title."""
+    docs = db_service.db_service.list_documents(q=q, doc_type=type, limit=limit, offset=offset)
+    return [
+        {
+            "id": d.id,
+            "filename": d.filename,
+            "title": d.title,
+            "ext": d.ext,
+            "mime": d.mime,
+            "doc_type": d.doc_type,
+            "size_bytes": d.size_bytes,
+            "sha256": d.sha256,
+            "local_path": d.local_path,
+            "created_at": d.created_at,
+            "updated_at": d.updated_at,
+        }
+        for d in docs
+    ]
+
+
+@app.get("/docs/{doc_id}")
+async def docs_get(doc_id: str):
+    """Get document metadata and extraction state."""
+    doc = db_service.db_service.get_document(doc_id)
+    if not doc or doc.is_deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    dt = db_service.db_service.get_document_text(doc_id)
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "title": doc.title,
+        "ext": doc.ext,
+        "mime": doc.mime,
+        "doc_type": doc.doc_type,
+        "size_bytes": doc.size_bytes,
+        "sha256": doc.sha256,
+        "local_path": doc.local_path,
+        "created_at": doc.created_at,
+        "updated_at": doc.updated_at,
+        "has_text": dt is not None and bool((dt.extracted_text or "").strip()),
+        "extracted_at": dt.extracted_at if dt else None,
+    }
+
+
+@app.get("/docs/{doc_id}/text")
+async def docs_get_text(doc_id: str):
+    """Get extracted text for a document."""
+    doc = db_service.db_service.get_document(doc_id)
+    if not doc or doc.is_deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    dt = db_service.db_service.get_document_text(doc_id)
+    if not dt or not (dt.extracted_text or "").strip():
+        raise HTTPException(status_code=404, detail="No extracted text")
+    return {"doc_id": doc_id, "text": dt.extracted_text}
+
+
+class DocsRenameBody(BaseModel):
+    title: Optional[str] = None
+
+
+@app.post("/docs/{doc_id}/rename")
+async def docs_rename(doc_id: str, body: DocsRenameBody):
+    """Update document display title."""
+    doc = db_service.db_service.get_document(doc_id)
+    if not doc or doc.is_deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    title = (body.title or "").strip() or None
+    db_service.db_service.update_document_title(doc_id, title)
+    doc = db_service.db_service.get_document(doc_id)
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "title": doc.title,
+        "doc_type": doc.doc_type,
+        "created_at": doc.created_at,
+    }
+
+
+@app.delete("/docs/{doc_id}")
+async def docs_delete(doc_id: str):
+    """Soft-delete a document."""
+    doc = db_service.db_service.get_document(doc_id)
+    if not doc or doc.is_deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    db_service.db_service.soft_delete_document(doc_id)
+    return {"id": doc_id, "deleted": True}
+
+
 @app.get("/app-mode")
 async def get_app_mode():
     """Get the current app mode."""
@@ -1012,6 +1229,10 @@ def _voices_dir() -> Path:
 
 def _images_dir() -> Path:
     return Path(os.environ.get("KEERO_IMAGES_DIR") or _app_data_dir().joinpath("images"))
+
+
+def _docs_dir() -> Path:
+    return Path(os.environ.get("KEERO_DOCS_DIR") or _app_data_dir().joinpath("Docs"))
 
 
 class VoiceDownloadRequest(BaseModel):
@@ -1838,6 +2059,8 @@ async def websocket_unified(websocket: WebSocket, client_type: str = Query(defau
         except Exception:
             pass
 
+    session_doc_ids: List[str] = []
+
     # Helper to build LLM context with conversation history
     def _build_llm_context(user_text: str) -> List[Dict[str, str]]:
         try:
@@ -1922,6 +2145,15 @@ async def websocket_unified(websocket: WebSocket, client_type: str = Query(defau
             runtime=runtime,
             extra_system_prompt=behavior_constraints,
         )
+        if session_doc_ids:
+            doc_texts = db_service.db_service.get_documents_text_for_ids(session_doc_ids)
+            if doc_texts:
+                doc_block = (
+                    "The user has attached the following document content for context. "
+                    "Use it to answer questions when relevant. Reference docs by filename or content when answering.\n\n"
+                    + "\n\n---\n\n".join(text for _, text in doc_texts)
+                )
+                sys_prompt = sys_prompt + "\n\n" + doc_block
 
         history_msgs: List[Dict[str, str]] = []
         for c in convos:
@@ -2370,7 +2602,11 @@ async def websocket_unified(websocket: WebSocket, client_type: str = Query(defau
                         if msg_type == "config":
                             session_voice = data.get("voice", "dave")
                             session_system_prompt = data.get("system_prompt")
-                            logger.info(f"Config updated: voice={session_voice}, prompt_len={len(session_system_prompt) if session_system_prompt else 0}")
+                            doc_ids = data.get("doc_ids")
+                            if doc_ids is not None and isinstance(doc_ids, list):
+                                session_doc_ids.clear()
+                                session_doc_ids.extend(str(d) for d in doc_ids if d)
+                            logger.info(f"Config updated: voice={session_voice}, prompt_len={len(session_system_prompt) if session_system_prompt else 0}, doc_ids={len(session_doc_ids)}")
                         
                         elif msg_type == "audio":
                             audio_data = base64.b64decode(data["data"])

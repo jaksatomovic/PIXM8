@@ -85,8 +85,8 @@ Extraction is safe: zip-slip prevented, max zip size 100 MB, only `.json`, `.wav
 ### Test with the demo pack
 
 1. Zip the demo: `cd examples/addons && zip -r retro_future_pack.zip retro_future_pack/`
-2. Open the app → **Packs** → **Install from file** → select `retro_future_pack.zip`.
-3. After install, go to **Home** and check **Games** and **Chat** tabs; new personalities, games, and stories from the pack appear. You can disable the pack in Packs to hide them, or uninstall to remove them.
+2. Open the app → **Packs** (sidebar) → **Install from file** → select `retro_future_pack.zip`.
+3. After install, go to **Home** and check **Docs**, **Games**, and **Chat** tabs; new personalities, games, and stories from the pack appear on Games and Chat. You can disable the pack in Packs to hide them, or uninstall to remove them.
 
 ### Managing Packs
 
@@ -106,6 +106,30 @@ This ensures the core content always remains available while allowing community 
 ### PAL Core vs Addon Packs (content layout)
 
 Built-in content: base voices in `app/src/assets/packs/fun_voices/voices.json`, base personalities in `app/src/assets/personalities.json`; optional pack content (play pack, stories pack) under `app/src/assets/packs/`. See **app/src/assets/README.md** for the full layout and addon mapping.
+
+## Docs (Home tab)
+
+The **Home** page has three tabs: **Docs**, **Games**, and **Chat**. The **Docs** tab is a document library for uploading files and using them as AI context in chat.
+
+### What you can do
+
+- **Upload** — Upload documents and images (max 50 MB per file). Supported formats: PDF, plain text (`.txt`, `.md`, `.json`, `.csv`), images (`.jpg`, `.png`, `.gif`, `.webp`), and Word (`.doc`, `.docx`).
+- **Search and filter** — Search by filename or title; filter by type (All, PDF, Text, Image, Doc, Other).
+- **Select for chat** — Use **Attach to Chat** on a doc to add it to the current context, or multi-select docs and click **Chat with selected** to switch to the Chat tab with those docs attached.
+- **Context in Chat** — When a personality is selected, a **Context** area above the chat bar shows attached docs (chips with remove). Use **Add Docs** to open the Docs tab. The voice chat uses the attached document text (when available) to answer questions; the AI is instructed to reference the docs by filename or content.
+
+### Supported formats and text extraction
+
+- **PDF** — Text is extracted with pypdf and included in context (no OCR).
+- **Plain text** (`.txt`, `.md`, `.json`, `.csv`) — Content is read as UTF-8 and stored for context.
+- **Images** — Stored and listed; no OCR in MVP (metadata only).
+- **Word** (`.doc`, `.docx`) — Stored; no text extraction in MVP.
+
+Total document context sent to the model is capped (e.g. 20k characters) to stay within limits.
+
+### Local storage
+
+Documents are stored under the app data directory: **`{AppData}/Docs/{doc_id}/original.{ext}`**. On macOS: `~/Library/Application Support/io.keero/Docs/`. The app uses `KEERO_DOCS_DIR` when set (e.g. by the Tauri backend). Metadata and extracted text are stored in SQLite (`documents`, `document_text` tables).
 
 ## Default Voice and Default Personality (Personalization)
 

@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, User, LockKeyhole, Volume2, Settings, History, Plus, Home, Dot, Package } from 'lucide-react';
+import { Users, User, LockKeyhole, Volume2, Settings, History, Plus, Home, Dot, Package, UserCircle, AudioWaveform } from 'lucide-react';
 import clsx from 'clsx';
 import { useActiveUser } from '../state/ActiveUserContext';
 import { useEffect, useState } from 'react';
@@ -132,8 +132,9 @@ export const Sidebar = () => {
               matchPath="/"
             />
             <NavItem to="/packs" icon={Package} label="Packs" />
+            <NavItem to="/profiles" icon={UserCircle} label="Profiles" />
             <NavItem to="/personalities" icon={User} label="Personalities" />
-            <NavItem to="/voices" icon={Volume2} label="Voices" />
+            <NavItem to="/voices" icon={AudioWaveform} label="Voices" />
             <div className="grid grid-cols-3 gap-2 px-3 pb-3 w-full mt-3">
               <NavItem
                 to="/conversations"

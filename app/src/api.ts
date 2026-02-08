@@ -317,6 +317,61 @@ export const api = {
     });
   },
 
+  // Docs Library
+  listDocs: async (params?: { q?: string; type?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.q != null) qs.set("q", params.q);
+    if (params?.type != null) qs.set("type", params.type);
+    if (params?.limit != null) qs.set("limit", String(params.limit));
+    if (params?.offset != null) qs.set("offset", String(params.offset));
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return request(`/docs/list${suffix}`);
+  },
+
+  getDoc: async (docId: string) => {
+    return request(`/docs/${encodeURIComponent(docId)}`);
+  },
+
+  getDocText: async (docId: string) => {
+    return request(`/docs/${encodeURIComponent(docId)}/text`);
+  },
+
+  uploadDoc: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE}/docs/upload`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const data: any = await res.json().catch(() => ({}));
+        const msg = data?.detail || data?.message || data?.error || `Request failed: ${res.status}`;
+        const err: any = new Error(typeof msg === "string" ? msg : String(msg));
+        err.status = res.status;
+        throw err;
+      }
+      const text = await res.text().catch(() => "");
+      const err: any = new Error(text || `Request failed: ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  },
+
+  renameDoc: async (docId: string, title: string | null) => {
+    return request(`/docs/${encodeURIComponent(docId)}/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+  },
+
+  deleteDoc: async (docId: string) => {
+    return request(`/docs/${encodeURIComponent(docId)}`, { method: "DELETE" });
+  },
+
   getDeviceStatus: async () => {
     return request(`/device`);
   },
