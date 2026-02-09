@@ -13,6 +13,7 @@ from .profiles import ProfilesMixin
 from .seeds import SeedMixin
 from .sessions import SessionsMixin
 from .settings import SettingsMixin
+from .user_faces import UserFacesMixin
 from .users import UsersMixin
 from .voices import VoicesMixin
 
@@ -28,6 +29,7 @@ class DBService(
     VoicesMixin,
     PersonalitiesMixin,
     ProfilesMixin,
+    UserFacesMixin,
     UsersMixin,
     SessionsMixin,
     ConversationsMixin,

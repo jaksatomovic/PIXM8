@@ -78,6 +78,7 @@ class VoicesMixin:
             is_builtin=bool(_col(row, "is_builtin")) if _col(row, "is_builtin") is not None else False,
             local_path=_col(row, "local_path"),
             updated_at=_col(row, "updated_at"),
+            download_url=_col(row, "download_url"),
         )
 
     def get_voice(self, voice_id: str) -> Optional[Voice]:

@@ -25,6 +25,7 @@ type Addon = {
   experiences_count: number;
   voices_count?: number;
   installed_at?: number;
+  source?: string;
 };
 
 type CatalogItem = {
@@ -38,18 +39,31 @@ type CatalogItem = {
   tags?: string[];
 };
 
+type LocalPackItem = {
+  id: string;
+  name: string;
+  version: string;
+  author?: string;
+  description?: string;
+  img_src?: string;
+  installed: boolean;
+  source: string;
+};
+
 /** Default packs offered to the user (install from file or from catalog). */
 const DEFAULT_PACKS: { id: string; name: string; description: string }[] = [
-  { id: 'retro_future_pack', name: 'Retro Future Pack', description: 'Synthwave + CRT + arcade vibes. Personalities, games, and stories.' },
+  // { id: 'retro_future_pack', name: 'Retro Future Pack', description: 'Synthwave + CRT + arcade vibes. Personalities, games, and stories.' },
 ];
 
 export const PacksPage = () => {
   const [addons, setAddons] = useState<Addon[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [localCatalog, setLocalCatalog] = useState<LocalPackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [installingUrl, setInstallingUrl] = useState<string | null>(null);
+  const [installingLocalPackId, setInstallingLocalPackId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [brokenImgById, setBrokenImgById] = useState<Record<string, boolean>>({});
@@ -88,9 +102,19 @@ export const PacksPage = () => {
     }
   };
 
+  const loadLocalCatalog = async () => {
+    try {
+      const list = await api.getLocalPacksCatalog();
+      setLocalCatalog(Array.isArray(list) ? list : []);
+    } catch {
+      setLocalCatalog([]);
+    }
+  };
+
   useEffect(() => {
     loadAddons();
     loadCatalog();
+    loadLocalCatalog();
   }, []);
 
   const handleInstallClick = () => {
@@ -164,7 +188,7 @@ export const PacksPage = () => {
     }
   };
 
-  const handleUninstall = async (addonId: string, addonName: string) => {
+  const handleUninstall = async (addonId: string, addonName: string, source?: string) => {
     if (!confirm(`Uninstall "${addonName}"? Experiences and pack data will be removed.`)) {
       return;
     }
@@ -173,11 +197,15 @@ export const PacksPage = () => {
     setSuccess(null);
 
     try {
-      const result = await api.uninstallAddon(addonId);
+      const isLocalPack =
+        source === 'local_assets' ||
+        localCatalog.some((item) => item.id === addonId && item.source === 'local_assets');
+      const result = isLocalPack ? await api.uninstallPack(addonId) : await api.uninstallAddon(addonId);
 
       if (result?.success) {
         setSuccess(`"${addonName}" uninstalled.`);
         await loadAddons();
+        await loadLocalCatalog();
       } else {
         setError(result?.error || 'Uninstall failed');
       }
@@ -186,9 +214,37 @@ export const PacksPage = () => {
     }
   };
 
+  const handleInstallLocalPack = async (packId: string, packName: string) => {
+    setInstallingLocalPackId(packId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await api.installLocalPack(packId);
+
+      if (result?.success) {
+        setSuccess(
+          `"${result.addon_name ?? packName}" installed. ` +
+            `${result.voices_added ?? 0} voices, ` +
+            `${(result.personalities_added ?? 0) + (result.personalities_updated ?? 0)} personalities.`
+        );
+        await loadAddons();
+        await loadLocalCatalog();
+        window.dispatchEvent(new CustomEvent('packs-installed'));
+      } else {
+        setError(result?.error || 'Install failed');
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to install pack');
+    } finally {
+      setInstallingLocalPackId(null);
+    }
+  };
+
   const installedIds = new Set(addons.map((a) => a.id));
   const catalogAvailable = catalog.filter((c) => !installedIds.has(c.id));
   const defaultAvailable = DEFAULT_PACKS.filter((d) => !installedIds.has(d.id));
+  const localAvailable = localCatalog.filter((item) => !installedIds.has(item.id));
 
   return (
     <div className="space-y-6">
@@ -259,7 +315,7 @@ export const PacksPage = () => {
             className="retro-card retro-not-selected flex flex-col cursor-pointer transition-shadow hover:shadow-[var(--shadow-retro-hover)] text-left"
             style={{ padding: 0 }}
           >
-            <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]" style={{ backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '6px 6px' }}>
+            <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]">
               <ImageIcon size={18} className="text-gray-600" />
             </div>
             <div className="min-w-0 flex-1 p-4">
@@ -276,6 +332,73 @@ export const PacksPage = () => {
             </div>
           </div>
 
+          {/* Section label: Available Packs (Local) */}
+          {localAvailable.length > 0 && (
+            <div className="col-span-full">
+              <h2 className="text-lg font-bold uppercase tracking-wider text-gray-500">
+                Available Packs (Local)
+              </h2>
+            </div>
+          )}
+          {/* Available Packs (Local) – install from assets */}
+          {localAvailable.map((item) => {
+            const src = imgSrcFor(item);
+            const broken = brokenImgById[`local-${item.id}`];
+            return (
+              <div
+                key={`local-${item.id}`}
+                className="retro-card retro-not-selected flex flex-col text-left"
+                style={{ padding: 0 }}
+              >
+                <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)] relative">
+                  {src && !broken ? (
+                    <div className="w-full h-full flex items-center justify-center overflow-hidden">
+                      <img
+                        src={src}
+                        alt=""
+                        className="h-auto w-auto max-h-full max-w-full object-contain object-center"
+                        onError={() => setBrokenImgById((prev) => ({ ...prev, [`local-${item.id}`]: true }))}
+                      />
+                    </div>
+                  ) : (
+                    <Package className="w-10 h-10 text-gray-500" />
+                  )}
+                  {item.installed && (
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-bold bg-[var(--color-retro-accent)] text-white uppercase">
+                      Installed
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 p-4">
+                  <h3 className="text-lg font-black leading-tight retro-clamp-2">{item.name}</h3>
+                  <p className="text-gray-600 text-xs font-medium mt-1">v{item.version}</p>
+                  <p className="text-gray-600 text-xs font-medium mt-2 retro-clamp-2">{item.description || '—'}</p>
+                </div>
+                <div className="mt-auto border-t border-gray-200 p-4">
+                  {item.installed ? (
+                    <button
+                      type="button"
+                      onClick={() => handleUninstall(item.id, item.name)}
+                      className="retro-btn retro-btn-outline text-red-600 hover:bg-red-50 w-full justify-center gap-2"
+                    >
+                      <Trash2 size={14} />
+                      Uninstall
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleInstallLocalPack(item.id, item.name)}
+                      disabled={installingLocalPackId !== null}
+                      className="retro-btn w-full justify-center gap-2 disabled:opacity-50"
+                    >
+                      {installingLocalPackId === item.id ? 'Installing…' : 'Install'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
           {/* Default packs (not installed) – install from file */}
           {defaultAvailable.map((pack) => (
             <div
@@ -283,7 +406,7 @@ export const PacksPage = () => {
               className="retro-card retro-not-selected flex flex-col text-left"
               style={{ padding: 0 }}
             >
-              <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]" style={{ backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '6px 6px' }}>
+              <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]">
                 <ImageIcon size={18} className="text-gray-600" />
               </div>
               <div className="min-w-0 flex-1 p-4">
@@ -314,7 +437,7 @@ export const PacksPage = () => {
               className="retro-card retro-not-selected flex flex-col text-left"
               style={{ padding: 0 }}
             >
-              <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]" style={{ backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '6px 6px' }}>
+              <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]">
                 {src && !broken ? (
                   <div className="w-full h-full flex items-center justify-center overflow-hidden">
                     <img
@@ -362,7 +485,7 @@ export const PacksPage = () => {
               className="retro-card retro-not-selected flex flex-col text-left"
               style={{ padding: 0 }}
             >
-              <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]" style={{ backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '6px 6px' }}>
+              <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]">
                 {src && !broken ? (
                   <div className="w-full h-full flex items-center justify-center overflow-hidden">
                     <img
@@ -401,7 +524,7 @@ export const PacksPage = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleUninstall(addon.id, addon.name)}
+                  onClick={() => handleUninstall(addon.id, addon.name, addon.source)}
                   className="retro-btn retro-btn-outline text-red-600 hover:bg-red-50 flex items-center gap-2"
                 >
                   <Trash2 size={14} />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useActiveUser } from '../state/ActiveUserContext';
-import { Package, Star, User } from 'lucide-react';
+import { Package, Star, User, MessageCircle } from 'lucide-react';
 
 type Personality = {
   id: string;
@@ -45,6 +45,7 @@ export const PersonalitiesPage = () => {
     }
   };
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -80,6 +81,12 @@ export const PersonalitiesPage = () => {
     };
     load();
     return () => { cancelled = true; };
+  }, [refreshTrigger]);
+
+  useEffect(() => {
+    const onPacksInstalled = () => setRefreshTrigger((t) => t + 1);
+    window.addEventListener('packs-installed', onPacksInstalled);
+    return () => window.removeEventListener('packs-installed', onPacksInstalled);
   }, []);
 
   const filtered = useMemo(() => {
@@ -157,7 +164,7 @@ export const PersonalitiesPage = () => {
           className="retro-card font-mono text-sm mb-4"
           style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}
         >
-          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then use &quot;Use for this session&quot; to start chatting with a personality.
+          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then click &quot;Activate&quot; on a personality to begin.
         </div>
       )}
 
@@ -194,39 +201,45 @@ export const PersonalitiesPage = () => {
         {filtered.map((p) => (
           <div
             key={p.id}
-            className={`retro-card flex flex-col text-left ${
+            className={`retro-card flex flex-col text-left relative ${
               (activeSession?.active_personality_id ?? activeUser?.current_personality_id) === p.id ? 'retro-selected' : 'retro-not-selected'
             }`}
             style={{ padding: 0 }}
           >
-            <div className="min-w-0 flex-1 p-4">
+            <button
+              type="button"
+              onClick={() => setAsDefault(p.id)}
+              className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-amber-500 transition-colors"
+              title="Set as default personality"
+              aria-label={(activeSession?.default_personality_id ?? preferences.default_personality_id) === p.id ? 'Default personality' : 'Set as default'}
+            >
+              <Star
+                size={18}
+                className={(activeSession?.default_personality_id ?? preferences.default_personality_id) === p.id ? 'fill-amber-500 text-amber-500' : ''}
+              />
+            </button>
+            <div className="min-w-0 flex-1 p-4 pr-12">
               <h3 className="text-lg font-black leading-tight retro-clamp-2">{p.name}</h3>
               <p className="text-gray-600 text-xs font-medium mt-2 retro-clamp-2">
                 {p.short_description || '—'}
               </p>
             </div>
-            <div className="mt-auto border-t border-gray-200 p-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setAsDefault(p.id)}
-                className={`retro-btn retro-btn-outline flex items-center gap-2 ${
-                  (activeSession?.default_personality_id ?? preferences.default_personality_id) === p.id ? 'opacity-100 font-bold' : ''
-                }`}
-                title="Set as default personality"
-              >
-                <Star size={14} />
-                {(activeSession?.default_personality_id ?? preferences.default_personality_id) === p.id ? 'Default' : 'Set as Default'}
-              </button>
+            <div className="mt-auto p-4">
               <button
                 type="button"
                 onClick={() => useForSession(p.id)}
-                className={`retro-btn flex items-center gap-2 ${
-                  (activeSession?.active_personality_id ?? activeUser?.current_personality_id) === p.id ? 'opacity-100 font-bold' : ''
+                className={`retro-btn w-full flex items-center justify-center gap-2 ${
+                  (activeSession?.active_personality_id ?? activeUser?.current_personality_id) === p.id ? 'font-bold' : ''
                 }`}
+                style={
+                  (activeSession?.active_personality_id ?? activeUser?.current_personality_id) === p.id
+                    ? { backgroundColor: '#059669', color: '#ffffff', borderColor: '#047857' }
+                    : undefined
+                }
                 title="Use for this session and go to chat"
               >
-                <User size={14} />
-                {(activeSession?.active_personality_id ?? activeUser?.current_personality_id) === p.id ? 'Active' : 'Use for this session'}
+                <MessageCircle size={14} />
+                {(activeSession?.active_personality_id ?? activeUser?.current_personality_id) === p.id ? 'Active' : 'Activate'}
               </button>
             </div>
           </div>

@@ -111,10 +111,25 @@
     box-shadow: var(--shadow-retro-sm);
   }
 
+  /* Dotted background – page / large areas (subtle, 18px grid) */
   .retro-dots {
     background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
     background-size: 18px 18px;
     background-position: -1px -1px;
+  }
+
+  /* Same style, tighter grid – cards / upload placeholders (6px, slightly stronger) */
+  .retro-dots-tight {
+    background-image: radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+    background-size: 6px 6px;
+  }
+
+  /* Light cross/plus grid – simple, cute, different from dots */
+  .retro-cross {
+    background-image:
+      linear-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+    background-size: 10px 10px;
   }
 
   .brand-font {

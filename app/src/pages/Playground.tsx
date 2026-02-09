@@ -14,11 +14,10 @@ type ExperienceType = 'personality' | 'game' | 'story' | 'docs';
 
 const TAB_CONFIG: { id: ExperienceType; label: string; icon: typeof MessageCircle }[] = [
   { id: 'docs', label: 'Docs', icon: FileText },
-  { id: 'game', label: 'Games', icon: Gamepad2 },
   { id: 'personality', label: 'Chat', icon: MessageCircle },
 ];
 
-const VALID_TABS: ExperienceType[] = ['personality', 'game', 'docs'];
+const VALID_TABS: ExperienceType[] = ['personality', 'docs'];
 
 export const Playground = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,15 +57,17 @@ export const Playground = () => {
   const GLOBAL_IMAGE_BASE_URL = 'https://pub-a64cd21521e44c81a85db631f1cdaacc.r2.dev';
 
   const imgSrcFor = (p: any) => {
+    const src = typeof p?.img_src === 'string' ? p.img_src.trim() : '';
+    if (src) {
+      if (/^https?:\/\//i.test(src)) return src;
+      return convertFileSrc(src);
+    }
     if (p?.is_global) {
       const id = p?.id != null ? String(p.id) : '';
       if (!id) return null;
       return `${GLOBAL_IMAGE_BASE_URL}/${encodeURIComponent(id)}.png`;
     }
-    const src = typeof p?.img_src === 'string' ? p.img_src.trim() : '';
-    if (!src) return null;
-    if (/^https?:\/\//i.test(src)) return src;
-    return convertFileSrc(src);
+    return null;
   };
 
   const toTimestamp = (v: any) => {
@@ -306,11 +307,7 @@ export const Playground = () => {
         panelClassName="w-full max-w-2xl"
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-          <div className="w-full h-[200px] rounded-[24px] border bg-orange-50/50 border-gray-200 flex items-center justify-center overflow-hidden" 
-style={{
-                            backgroundImage: `radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)`,
-                            backgroundSize: '6px 6px'
-                        }}>
+          <div className="w-full h-[200px] rounded-[24px] border bg-orange-50/50 retro-cross border-gray-200 flex items-center justify-center overflow-hidden">
             {infoExperience && imgSrcFor(infoExperience) && !brokenImgById[String(infoExperience.id)] ? (
               <img
                 src={imgSrcFor(infoExperience) || ''}
@@ -479,11 +476,7 @@ style={{
                     />
                   </label>
                 ) : (
-                  <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 flex items-center justify-center overflow-hidden"                         
-style={{
-                            backgroundImage: `radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)`,
-                            backgroundSize: '6px 6px'
-                        }}>
+                  <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden">
                     {imgSrcFor(p) && !brokenImgById[String(p.id)] ? (
                       <div className="w-full h-full flex items-center justify-center overflow-hidden">
                         <img

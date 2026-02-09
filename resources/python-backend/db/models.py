@@ -42,6 +42,7 @@ class Voice:
     is_builtin: bool = False
     local_path: Optional[str] = None
     updated_at: Optional[float] = None
+    download_url: Optional[str] = None
 
 
 @dataclass
@@ -94,6 +95,15 @@ class Session:
     client_type: str
     user_id: Optional[str]
     personality_id: Optional[str]
+
+
+@dataclass
+class UserFace:
+    """Face photo for a user (for future face recognition)."""
+    id: str
+    user_id: str
+    local_path: str
+    created_at: float
 
 
 @dataclass

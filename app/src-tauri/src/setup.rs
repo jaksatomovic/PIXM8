@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::paths::{
     bootstrap_python_if_needed, get_bootstrap_python, get_keero_dir, get_venv_path, get_venv_pip,
-    get_venv_python,
+    get_venv_python, get_tesseract_cmd,
 };
 use crate::python_setup;
 
@@ -180,4 +180,79 @@ pub async fn is_first_launch(app: AppHandle) -> Result<bool, String> {
     let venv_python = get_venv_python(&app);
 
     Ok(!marker_file.exists() || !venv_python.exists())
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TesseractStatus {
+    pub installed: bool,
+    pub path: Option<String>,
+    pub manual_download_url: String,
+    /// True on macOS (can run `brew install tesseract`).
+    pub can_auto_install: bool,
+}
+
+#[tauri::command]
+pub async fn tesseract_status(app: AppHandle) -> Result<TesseractStatus, String> {
+    let path = get_tesseract_cmd(&app);
+    let installed = path.is_some();
+    let path_str = path.as_ref().map(|p| p.to_string_lossy().to_string());
+    let manual_download_url = match std::env::consts::OS {
+        "windows" => "https://github.com/UB-Mannheim/tesseract/wiki".to_string(),
+        "macos" => "https://tesseract-ocr.github.io/tessdoc/Installation.html#macos".to_string(),
+        _ => "https://tesseract-ocr.github.io/tessdoc/Installation.html".to_string(),
+    };
+    let can_auto_install = cfg!(target_os = "macos");
+    Ok(TesseractStatus {
+        installed,
+        path: path_str,
+        manual_download_url,
+        can_auto_install,
+    })
+}
+
+/// Install Tesseract. On macOS tries `brew install tesseract` if Homebrew is available.
+/// On Windows/Linux returns an error; user should install manually.
+#[tauri::command]
+pub async fn tesseract_install(_app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let brew = which_brew();
+        let brew = match brew {
+            Some(p) => p,
+            None => {
+                return Err("Homebrew not found. Install it from https://brew.sh or install Tesseract manually.".to_string());
+            }
+        };
+        let output = Command::new(brew)
+            .args(["install", "tesseract"])
+            .output()
+            .map_err(|e| format!("Failed to run Homebrew: {}", e))?;
+        if output.status.success() {
+            return Ok(());
+        }
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Err(format!(
+            "Homebrew install failed: {} {}",
+            stdout.trim(),
+            stderr.trim()
+        ))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = _app;
+        Err("Automatic install is only available on macOS (via Homebrew). Please use the install instructions link below.".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn which_brew() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let brew = dir.join("brew");
+        if brew.is_file() {
+            return Some(brew);
+        }
+    }
+    None
 }

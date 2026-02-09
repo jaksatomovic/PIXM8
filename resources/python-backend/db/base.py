@@ -10,6 +10,7 @@ ALLOWED_TABLES = {
     "personalities",
     "profiles",
     "sessions",
+    "user_faces",
     "users",
     "voices",
 }

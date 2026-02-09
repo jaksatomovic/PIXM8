@@ -335,17 +335,20 @@ def list_installed_addons() -> List[Dict]:
             )
             row = cursor.fetchone()
             voice_count = row["n"] if row else 0
-            out.append({
-                "id": a.id,
-                "name": a.name,
-                "version": a.version,
-                "author": a.author,
-                "description": a.description,
-                "is_enabled": a.is_enabled,
-                "experiences_count": exp_count,
-                "voices_count": voice_count,
-                "installed_at": a.installed_at,
-            })
+            out.append(
+                {
+                    "id": a.id,
+                    "name": a.name,
+                    "version": a.version,
+                    "author": a.author,
+                    "description": a.description,
+                    "is_enabled": a.is_enabled,
+                    "experiences_count": exp_count,
+                    "voices_count": voice_count,
+                    "installed_at": a.installed_at,
+                    "source": a.source,
+                }
+            )
         conn.close()
         return out
     except Exception as e:

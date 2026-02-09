@@ -13,6 +13,7 @@ def get_user_preferences(settings_json: Optional[str]) -> Dict[str, Any]:
         "profiles": [],
         "use_default_voice_everywhere": True,
         "allow_experience_voice_override": False,
+        "assistant_language": None,
     }
     if not settings_json or not settings_json.strip():
         return out
@@ -40,6 +41,9 @@ def get_user_preferences(settings_json: Optional[str]) -> Dict[str, Any]:
                 out["use_default_voice_everywhere"] = bool(data["use_default_voice_everywhere"])
             if "allow_experience_voice_override" in data:
                 out["allow_experience_voice_override"] = bool(data["allow_experience_voice_override"])
+            if "assistant_language" in data and data["assistant_language"]:
+                # Store as lowercased language code / keyword (e.g. "en", "hr", "auto")
+                out["assistant_language"] = str(data["assistant_language"]).strip().lower()
     except Exception:
         pass
     return out

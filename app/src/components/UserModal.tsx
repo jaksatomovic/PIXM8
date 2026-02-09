@@ -3,7 +3,9 @@ import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
 import { api } from "../api";
 import { Modal } from "./Modal";
 import { EmojiAvatar } from "./EmojiAvatar";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus, Camera, Trash2 } from "lucide-react";
+
+export type FaceItem = { id: string; created_at: number };
 
 export type UserForModal = {
   id: string;
@@ -20,9 +22,67 @@ type UserModalProps = {
   user?: UserForModal | null;
   onClose: () => void;
   onSuccess: () => Promise<void> | void;
+  faceFaces?: FaceItem[];
+  faceUserId?: string;
+  getFaceImageUrl?: (userId: string, faceId: string) => Promise<string | null>;
+  onAddFace?: (file: File) => void;
+  onDeleteFace?: (faceId: string) => void;
+  uploadingFace?: boolean;
 };
 
-export function UserModal({ open, mode, user, onClose, onSuccess }: UserModalProps) {
+function FaceThumbnail({
+  userId,
+  faceId,
+  getImageUrl,
+  onDelete,
+}: {
+  userId: string;
+  faceId: string;
+  getImageUrl: (userId: string, faceId: string) => Promise<string | null>;
+  onDelete: () => void;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getImageUrl(userId, faceId).then((url) => {
+      if (!cancelled && url) setSrc(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, faceId, getImageUrl]);
+  return (
+    <div className="relative inline-block w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100">
+      {src ? (
+        <img src={src} alt="Face" className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">…</div>
+      )}
+      <button
+        type="button"
+        className="absolute top-0 right-0 retro-icon-btn w-6 h-6 rounded-bl"
+        aria-label="Delete face photo"
+        onClick={onDelete}
+      >
+        <Trash2 size={12} />
+      </button>
+    </div>
+  );
+}
+
+export function UserModal({
+  open,
+  mode,
+  user,
+  onClose,
+  onSuccess,
+  faceFaces = [],
+  faceUserId,
+  getFaceImageUrl,
+  onAddFace,
+  onDeleteFace,
+  uploadingFace = false,
+}: UserModalProps) {
   const [name, setName] = useState("");
   const [age, setAge] = useState<string>("");
   const [aboutYou, setAboutYou] = useState("");
@@ -191,6 +251,44 @@ export function UserModal({ open, mode, user, onClose, onSuccess }: UserModalPro
             placeholder={mode === "create" ? "A short note about you" : undefined}
           />
         </div>
+
+        {mode === "edit" && faceUserId && getFaceImageUrl && onAddFace && onDeleteFace && (
+          <div className="border-t border-gray-200 pt-4 flex flex-col gap-2">
+            <div className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+              <Camera size={14} />
+              Face photo for recognition
+            </div>
+            <p className="text-xs text-gray-600">
+              Add a photo for future face recognition when the device has a camera.
+            </p>
+            <div className="flex flex-wrap gap-2 items-center">
+              {faceFaces.map((face) => (
+                <FaceThumbnail
+                  key={face.id}
+                  userId={faceUserId}
+                  faceId={face.id}
+                  getImageUrl={getFaceImageUrl}
+                  onDelete={() => onDeleteFace(face.id)}
+                />
+              ))}
+              <label className="retro-btn retro-btn-outline text-sm inline-flex items-center gap-1 cursor-pointer">
+                <Plus size={14} />
+                {uploadingFace ? "Uploading…" : "Add photo"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={uploadingFace}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onAddFace(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end">
           <button className="retro-btn" type="button" onClick={submit} disabled={submitting}>

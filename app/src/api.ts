@@ -105,6 +105,7 @@ export const api = {
     default_profile_id?: string | null;
     use_default_voice_everywhere?: boolean;
     allow_experience_voice_override?: boolean;
+    assistant_language?: string | null;
   }) => {
     return request(`/users/me/preferences`, {
       method: "POST",
@@ -241,6 +242,37 @@ export const api = {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+    });
+  },
+
+  listUserFaces: async (userId: string) => {
+    return request(`/users/${encodeURIComponent(userId)}/faces`);
+  },
+
+  getUserFaceImage: async (userId: string, faceId: string) => {
+    return request(`/users/${encodeURIComponent(userId)}/faces/${encodeURIComponent(faceId)}/image`);
+  },
+
+  uploadUserFace: async (userId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/faces`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const msg = (data as any)?.detail || (data as any)?.message || `Request failed: ${res.status}`;
+      const err: any = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  },
+
+  deleteUserFace: async (userId: string, faceId: string) => {
+    return request(`/users/${encodeURIComponent(userId)}/faces/${encodeURIComponent(faceId)}`, {
+      method: "DELETE",
     });
   },
 
@@ -527,6 +559,27 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addon_id: addonId }),
+    });
+  },
+
+  // Local packs (assets, install from UI)
+  getLocalPacksCatalog: async () => {
+    return request(`/packs/local_catalog`);
+  },
+
+  installLocalPack: async (packId: string) => {
+    return request(`/packs/install_local`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pack_id: packId }),
+    });
+  },
+
+  uninstallPack: async (packId: string) => {
+    return request(`/packs/uninstall`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pack_id: packId }),
     });
   },
 };

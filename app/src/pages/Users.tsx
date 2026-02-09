@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { Pencil, Plus } from 'lucide-react';
 import { AddUserModal } from '../components/AddUserModal';
-import { EditUserModal } from '../components/EditUserModal';
+import { EditUserModal, type FaceItem } from '../components/EditUserModal';
 import { useActiveUser } from '../state/ActiveUserContext';
 import { EmojiAvatar } from '../components/EmojiAvatar';
 
@@ -13,7 +13,19 @@ export const UsersPage = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [userFaces, setUserFaces] = useState<Record<string, FaceItem[]>>({});
+  const [faceImageCache, setFaceImageCache] = useState<Record<string, string>>({});
+  const [uploadingFaceFor, setUploadingFaceFor] = useState<string | null>(null);
   const { refreshUsers, setActiveUserId, activeUserId } = useActiveUser();
+
+  const loadFacesForUser = useCallback(async (userId: string) => {
+    try {
+      const res = await api.listUserFaces(userId) as { faces?: FaceItem[] };
+      setUserFaces((prev) => ({ ...prev, [userId]: res?.faces || [] }));
+    } catch {
+      setUserFaces((prev) => ({ ...prev, [userId]: [] }));
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,6 +35,11 @@ export const UsersPage = () => {
         setError(null);
         const data = await api.getUsers();
         if (!cancelled) setUsers(data);
+        if (!cancelled && Array.isArray(data)) {
+          for (const u of data) {
+            if (u?.id) loadFacesForUser(u.id);
+          }
+        }
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Failed to load users');
       } finally {
@@ -34,7 +51,53 @@ export const UsersPage = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadFacesForUser]);
+
+  const getFaceImageUrl = useCallback(async (userId: string, faceId: string): Promise<string | null> => {
+    const key = `${userId}:${faceId}`;
+    if (faceImageCache[key]) return faceImageCache[key];
+    try {
+      const res = await api.getUserFaceImage(userId, faceId) as { base64?: string };
+      if (res?.base64) {
+        const url = `data:image/jpeg;base64,${res.base64}`;
+        setFaceImageCache((prev) => ({ ...prev, [key]: url }));
+        return url;
+      }
+    } catch {
+      //
+    }
+    return null;
+  }, [faceImageCache]);
+
+  const handleAddFace = async (userId: string, file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    setUploadingFaceFor(userId);
+    try {
+      await api.uploadUserFace(userId, file);
+      await loadFacesForUser(userId);
+    } catch (e: any) {
+      console.error('Upload face failed', e);
+    } finally {
+      setUploadingFaceFor(null);
+    }
+  };
+
+  const handleDeleteFace = async (userId: string, faceId: string) => {
+    try {
+      await api.deleteUserFace(userId, faceId);
+      setUserFaces((prev) => ({
+        ...prev,
+        [userId]: (prev[userId] || []).filter((f) => f.id !== faceId),
+      }));
+      setFaceImageCache((prev) => {
+        const next = { ...prev };
+        delete next[`${userId}:${faceId}`];
+        return next;
+      });
+    } catch (e: any) {
+      console.error('Delete face failed', e);
+    }
+  };
 
   return (
     <div>
@@ -74,6 +137,12 @@ export const UsersPage = () => {
           const data = await api.getUsers();
           setUsers(data);
         }}
+        userFaces={editingUser ? (userFaces[editingUser.id] || []) : []}
+        getFaceImageUrl={getFaceImageUrl}
+        onLoadFaces={editingUser ? () => loadFacesForUser(editingUser.id) : undefined}
+        onAddFace={editingUser ? (file: File) => handleAddFace(editingUser.id, file) : undefined}
+        onDeleteFace={editingUser ? (faceId: string) => handleDeleteFace(editingUser.id, faceId) : undefined}
+        uploadingFace={editingUser ? uploadingFaceFor === editingUser.id : false}
       />
 
       {loading && (

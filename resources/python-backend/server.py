@@ -31,7 +31,7 @@ from engine.characters import build_llm_messages, build_runtime_context, build_s
 
 import mlx.core as mx
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 from starlette.websockets import WebSocketState
 from mlx_lm.utils import load as load_llm
@@ -59,6 +59,7 @@ from services.addons import (
     list_installed_addons,
     uninstall_addon,
 )
+from services.local_packs import get_local_packs_catalog, install_local_pack
 
 # Client type constants
 CLIENT_TYPE_DESKTOP = "desktop"
@@ -360,6 +361,83 @@ async def set_active_user(body: ActiveUserUpdate):
     return await get_active_user()
 
 
+# --- User face photos (for future face recognition) ---
+
+MAX_USER_FACE_UPLOAD_BYTES = 5 * 1024 * 1024  # 5MB
+
+
+@app.get("/users/{user_id}/faces")
+async def list_user_faces(user_id: str):
+    """List face photos for a user (member)."""
+    user = db_service.db_service.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    faces = db_service.db_service.list_user_faces_by_user_id(user_id)
+    return {
+        "faces": [{"id": f.id, "user_id": f.user_id, "created_at": f.created_at} for f in faces],
+    }
+
+
+@app.get("/users/{user_id}/faces/{face_id}/image")
+async def get_user_face_image(user_id: str, face_id: str):
+    """Get face photo as base64 for display."""
+    face = db_service.db_service.get_user_face(face_id, user_id)
+    if not face:
+        raise HTTPException(status_code=404, detail="Face not found.")
+    path = Path(face.local_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Face image file not found.")
+    try:
+        b = path.read_bytes()
+        import base64
+        return {"base64": base64.b64encode(b).decode("ascii")}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/users/{user_id}/faces")
+async def upload_user_face(user_id: str, file: UploadFile = File(...)):
+    """Upload a face photo for a user (member). Used for future face recognition."""
+    user = db_service.db_service.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    content = await file.read()
+    if len(content) > MAX_USER_FACE_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 5MB)")
+    filename = file.filename or "face.jpg"
+    if isinstance(filename, bytes):
+        filename = filename.decode("utf-8", errors="replace")
+    ext = (filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg") or "jpg"
+    if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
+        ext = "jpg"
+    face_id = str(uuid.uuid4())
+    root = _user_faces_dir()
+    user_dir = root / user_id
+    user_dir.mkdir(parents=True, exist_ok=True)
+    local_path = user_dir / f"{face_id}.{ext}"
+    local_path.write_bytes(content)
+    face = db_service.db_service.insert_user_face(user_id, str(local_path.resolve()), face_id)
+    return {"id": face.id, "user_id": face.user_id, "created_at": face.created_at}
+
+
+@app.delete("/users/{user_id}/faces/{face_id}")
+async def delete_user_face(user_id: str, face_id: str):
+    """Delete a face photo for a user."""
+    face = db_service.db_service.get_user_face(face_id, user_id)
+    if not face:
+        raise HTTPException(status_code=404, detail="Face not found.")
+    deleted = db_service.db_service.delete_user_face(face_id, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Face not found.")
+    try:
+        path = Path(face.local_path)
+        if path.exists():
+            path.unlink()
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 # --- User preferences (default voice, default personality) ---
 
 @app.get("/users/me/preferences")
@@ -375,6 +453,7 @@ async def get_my_preferences():
             "profiles": [],
             "use_default_voice_everywhere": True,
             "allow_experience_voice_override": False,
+            "assistant_language": None,
         }
     prefs = get_user_preferences(getattr(user, "settings_json", None))
     profiles = _profiles_list_for_user(user_id) if user_id else []
@@ -385,6 +464,7 @@ async def get_my_preferences():
         "profiles": profiles,
         "use_default_voice_everywhere": prefs.get("use_default_voice_everywhere", True),
         "allow_experience_voice_override": prefs.get("allow_experience_voice_override", False),
+        "assistant_language": prefs.get("assistant_language"),
     }
 
 
@@ -394,6 +474,7 @@ class PreferencesUpdate(BaseModel):
     default_profile_id: Optional[str] = None
     use_default_voice_everywhere: Optional[bool] = None
     allow_experience_voice_override: Optional[bool] = None
+    assistant_language: Optional[str] = None
 
 
 @app.post("/users/me/preferences")
@@ -435,6 +516,10 @@ async def set_my_preferences(body: PreferencesUpdate):
         prefs["use_default_voice_everywhere"] = body.use_default_voice_everywhere
     if body.allow_experience_voice_override is not None:
         prefs["allow_experience_voice_override"] = body.allow_experience_voice_override
+    if body.assistant_language is not None:
+        lang = body.assistant_language.strip().lower()
+        # Allow simple codes/keywords like "en", "hr", "auto"; empty string resets to None.
+        prefs["assistant_language"] = lang or None
 
     _save_user_preferences(user_id, prefs)
     return await get_my_preferences()
@@ -454,6 +539,7 @@ def _save_user_preferences(user_id: str, prefs: dict) -> None:
         "default_profile_id": prefs.get("default_profile_id"),
         "use_default_voice_everywhere": prefs.get("use_default_voice_everywhere", True),
         "allow_experience_voice_override": prefs.get("allow_experience_voice_override", False),
+        "assistant_language": (prefs.get("assistant_language") or None),
     }
     db_service.db_service.update_user(user_id, settings_json=json.dumps(out))
 
@@ -613,6 +699,9 @@ def _extract_text_from_doc(doc_id: str, local_path: Path, mime: str, doc_type: s
             try:
                 from PIL import Image
                 import pytesseract
+                tesseract_cmd = os.environ.get("TESSERACT_CMD")
+                if tesseract_cmd:
+                    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
                 img = Image.open(local_path)
                 text = pytesseract.image_to_string(img)
                 if text and text.strip():
@@ -1160,10 +1249,14 @@ async def switch_model(body: ModelSwitchRequest):
 # --- Voices ---
 
 def _voice_is_downloaded(voice_id: str) -> bool:
-    """True if voice_id.wav exists in KEERO_VOICES_DIR."""
+    """True if voice_id.wav (or voice_id.mp3) exists in KEERO_VOICES_DIR."""
     try:
         voices_dir = Path(os.environ.get("KEERO_VOICES_DIR") or _app_data_dir().joinpath("voices"))
-        return (voices_dir / f"{voice_id}.wav").is_file()
+        # Check for common audio extensions
+        for ext in [".wav", ".mp3", ".m4a", ".ogg"]:
+            if (voices_dir / f"{voice_id}{ext}").is_file():
+                return True
+        return False
     except Exception:
         return False
 
@@ -1178,6 +1271,7 @@ async def get_voices(include_non_global: bool = True):
             "voice_name": v.voice_name,
             "voice_description": v.voice_description,
             "voice_src": v.voice_src,
+            "download_url": getattr(v, "download_url", None),
             "is_global": v.is_global,
             "is_builtin": getattr(v, "is_builtin", False),
             "is_downloaded": _voice_is_downloaded(v.voice_id),
@@ -1240,6 +1334,10 @@ def _docs_dir() -> Path:
     return Path(os.environ.get("KEERO_DOCS_DIR") or _app_data_dir().joinpath("Docs"))
 
 
+def _user_faces_dir() -> Path:
+    return _app_data_dir().joinpath("user_faces")
+
+
 class VoiceDownloadRequest(BaseModel):
     voice_id: str
 
@@ -1252,17 +1350,31 @@ async def download_voice_asset(body: VoiceDownloadRequest):
 
     print('downloading voice', voice_id)
 
-    base_url = os.environ.get(
-        "KEERO_VOICE_BASE_URL",
-        "https://pub-6b92949063b142d59fc3478c56ec196c.r2.dev",
-    ).rstrip("/")
-    url = f"{base_url}/{urllib.parse.quote(voice_id)}.wav"
+    # Check if voice has a download_url in the database
+    voice = db_service.db_service.get_voice(voice_id)
+    if voice and voice.download_url:
+        url = voice.download_url
+    else:
+        # Fall back to constructing URL from base URL
+        base_url = os.environ.get(
+            "KEERO_VOICE_BASE_URL",
+            "https://pub-6b92949063b142d59fc3478c56ec196c.r2.dev",
+        ).rstrip("/")
+        url = f"{base_url}/{urllib.parse.quote(voice_id)}.wav"
+    
     timeout_s = float(os.environ.get("KEERO_VOICE_TIMEOUT_S", "10"))
+    
+    # Determine file extension from URL (default to .wav for backward compatibility)
+    url_path = urllib.parse.urlparse(url).path
+    url_ext = Path(url_path).suffix.lower() if url_path else ".wav"
+    if url_ext not in [".wav", ".mp3", ".m4a", ".ogg"]:
+        url_ext = ".wav"  # Default to .wav if unknown extension
+    
     try:
         out_dir = _voices_dir()
         out_dir.mkdir(parents=True, exist_ok=True)
-        tmp_path = out_dir.joinpath(f"{voice_id}.wav.part")
-        final_path = out_dir.joinpath(f"{voice_id}.wav")
+        tmp_path = out_dir.joinpath(f"{voice_id}{url_ext}.part")
+        final_path = out_dir.joinpath(f"{voice_id}{url_ext}")
 
         def _fetch_to_path() -> None:
             try:
@@ -1278,7 +1390,7 @@ async def download_voice_asset(body: VoiceDownloadRequest):
                     url,
                     headers={
                         "User-Agent": "Keero/1.0",
-                        "Accept": "audio/wav,application/octet-stream;q=0.9,*/*;q=0.8",
+                        "Accept": "audio/wav,audio/mpeg,audio/mp3,application/octet-stream;q=0.9,*/*;q=0.8",
                         "Accept-Encoding": "identity",
                     },
                 )
@@ -1287,7 +1399,10 @@ async def download_voice_asset(body: VoiceDownloadRequest):
                         raise HTTPException(status_code=404, detail=f"Voice not found: {voice_id}")
                     content_length = resp.getheader("Content-Length")
                     try:
-                        resolved = socket.getaddrinfo("pub-6b92949063b142d59fc3478c56ec196c.r2.dev", 443)
+                        # Extract hostname from URL for DNS resolution logging
+                        parsed_url = urllib.parse.urlparse(url)
+                        hostname = parsed_url.hostname or "unknown"
+                        resolved = socket.getaddrinfo(hostname, 443)
                         resolved_ips = ",".join(sorted({r[4][0] for r in resolved}))
                     except Exception:
                         resolved_ips = "unknown"
@@ -1358,8 +1473,9 @@ async def list_downloaded_voices():
     if not out_dir.exists():
         return {"voices": []}
     voices: List[str] = []
+    audio_extensions = {".wav", ".mp3", ".m4a", ".ogg"}
     for path in out_dir.iterdir():
-        if not path.is_file() or path.suffix.lower() != ".wav":
+        if not path.is_file() or path.suffix.lower() not in audio_extensions:
             continue
         voices.append(path.stem)
     voices.sort()
@@ -1371,12 +1487,15 @@ async def read_voice_base64(voice_id: str):
     voice_id = (voice_id or "").strip()
     if not voice_id:
         return {"base64": None}
-    path = _voices_dir().joinpath(f"{voice_id}.wav")
-    if not path.exists() or not path.is_file():
-        return {"base64": None}
-    data = path.read_bytes()
-    encoded = base64.b64encode(data).decode("utf-8")
-    return {"base64": encoded}
+    voices_dir = _voices_dir()
+    # Try common audio extensions
+    for ext in [".wav", ".mp3", ".m4a", ".ogg"]:
+        path = voices_dir.joinpath(f"{voice_id}{ext}")
+        if path.exists() and path.is_file():
+            data = path.read_bytes()
+            encoded = base64.b64encode(data).decode("utf-8")
+            return {"base64": encoded}
+    return {"base64": None}
 
 
 class ImageSaveRequest(BaseModel):
@@ -1482,10 +1601,10 @@ async def get_experiences(include_hidden: bool = False, type: Optional[str] = No
 
 @app.get("/personalities")
 async def get_personalities(include_hidden: bool = False):
-    """Get all personalities (backward compatible)."""
+    """Get all personalities. Returns only type='personality' (no games/stories)."""
     personalities = db_service.db_service.get_experiences(
         include_hidden=include_hidden,
-        experience_type=None,  # Return all types for backward compatibility
+        experience_type="personality",
     )
     return [_experience_to_dict(p) for p in personalities]
 
@@ -1957,6 +2076,70 @@ async def uninstall_addon_endpoint(body: Dict[str, str]):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# --- Local packs (assets, no remote) ---
+
+@app.get("/packs/local_catalog")
+async def get_local_packs_catalog_endpoint():
+    """List packs available in assets/packs/ with installed status. Does not modify DB."""
+    try:
+        catalog = get_local_packs_catalog()
+        return catalog
+    except Exception as e:
+        logger.error(f"Local packs catalog failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/packs/install_local")
+async def install_local_pack_endpoint(body: Dict[str, str]):
+    """Install a pack from assets by pack_id."""
+    pack_id = (body.get("pack_id") or "").strip()
+    if not pack_id:
+        raise HTTPException(status_code=400, detail="pack_id is required")
+    try:
+        result = install_local_pack(pack_id)
+        return result
+    except Exception as e:
+        logger.error(f"Local pack install failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/packs/uninstall")
+async def uninstall_pack_endpoint(body: Dict[str, str]):
+    """Uninstall a pack by pack_id (same as addon_id)."""
+    pack_id = (body.get("pack_id") or "").strip()
+    if not pack_id:
+        raise HTTPException(status_code=400, detail="pack_id is required")
+    try:
+        # First try the normal addon uninstall flow (for packs installed with addon metadata).
+        result = uninstall_addon(pack_id)
+        if result.get("success"):
+            return result
+
+        # Legacy fallback: some earlier installs may have created voices/experiences with addon_id
+        # but no addon row. In that case, attempt a direct DB cleanup so the pack effectively
+        # uninstalls for the user.
+        try:
+            experiences_removed = db_service.db_service.delete_experiences_by_addon(pack_id)
+            voices_removed = db_service.db_service.delete_voices_by_addon(pack_id)
+            if experiences_removed or voices_removed:
+                return {
+                    "success": True,
+                    "addon_id": pack_id,
+                    "experiences_removed": experiences_removed,
+                    "voices_removed": voices_removed,
+                }
+        except Exception as inner_e:
+            logger.error(f"Legacy pack uninstall cleanup failed for {pack_id}: {inner_e}")
+
+        # If we reach here, we couldn't uninstall via addon or legacy path.
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error") or "Uninstall failed")
+        return result
+    except Exception as e:
+        logger.error(f"Pack uninstall failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- Shutdown ---
 
 @app.post("/shutdown")
@@ -2065,9 +2248,11 @@ async def websocket_unified(websocket: WebSocket, client_type: str = Query(defau
 
         runtime = build_runtime_context()
         user_ctx = None
+        prefs_for_language = {}
         try:
             u = db_service.db_service.get_user(user_id) if user_id else None
             if u:
+                prefs_for_language = get_user_preferences(getattr(u, "settings_json", None))
                 user_ctx = {
                     "name": u.name,
                     "age": u.age,
@@ -2092,6 +2277,16 @@ async def websocket_unified(websocket: WebSocket, client_type: str = Query(defau
             "You always respond with short sentences. "
             "Avoid punctuation like parentheses or colons or markdown that would not appear in conversational speech. Do not use Markdown formatting (no *, **, _, __, backticks). "
         )
+
+        # Apply assistant language preference (if any) as a global style constraint.
+        try:
+            lang = (prefs_for_language.get("assistant_language") or "").strip().lower()
+        except Exception:
+            lang = ""
+        if lang == "hr":
+            behavior_constraints += " You always respond in Croatian. Use natural, spoken Croatian and avoid English unless the user explicitly asks for it."
+        elif lang == "en":
+            behavior_constraints += " You always respond in English. Use natural, spoken English appropriate for voice conversation."
 
         behavior_constraints += (
             "To add expressivity, you should occasionally use ONLY these paralinguistic cues in brackets: "

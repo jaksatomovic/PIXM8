@@ -12,19 +12,15 @@ logger = logging.getLogger(__name__)
 
 class SeedMixin:
     def sync_global_voices_and_experiences(self) -> None:
-        """Sync voices and experiences (personalities, games, stories) from JSON assets.
-        Load order: core_voices.json (fallback voices.json), then packs/fun_voices/voices.json.
-        Experiences: core_personalities.json (fallback personalities.json), then pack files.
+        """Seed ONLY core voices and core personalities at startup.
+        Packs are NOT seeded; user must install them from Packs UI.
+        Core: core_voices.json (fallback voices.json), core_personalities.json (fallback personalities.json).
+        Only type='personality' is seeded; no games or stories.
         """
         root = assets_dir()
         voice_files: List[Path] = []
-        if (root / "core_voices.json").exists():
-            voice_files.append(root / "core_voices.json")
-        elif (root / "voices.json").exists():
+        if (root / "voices.json").exists():
             voice_files.append(root / "voices.json")
-        fun_voices = root / "packs" / "fun_voices" / "voices.json"
-        if fun_voices.exists():
-            voice_files.append(fun_voices)
 
         if not voice_files:
             return
@@ -40,7 +36,6 @@ class SeedMixin:
             if not isinstance(voices_payload, list):
                 continue
 
-            # Sync voices from this file
             for item in voices_payload:
                 if not isinstance(item, dict):
                     continue
@@ -51,13 +46,14 @@ class SeedMixin:
                 now = time.time()
                 cursor.execute(
                     """
-                    INSERT INTO voices (voice_id, gender, voice_name, voice_description, voice_src, is_global, created_at, addon_id, is_builtin, local_path, updated_at)
-                    VALUES (?, ?, ?, ?, ?, 1, ?, NULL, 1, NULL, ?)
+                    INSERT INTO voices (voice_id, gender, voice_name, voice_description, voice_src, download_url, is_global, created_at, addon_id, is_builtin, local_path, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 1, ?, NULL, 1, NULL, ?)
                     ON CONFLICT(voice_id) DO UPDATE SET
                       gender = excluded.gender,
                       voice_name = excluded.voice_name,
                       voice_description = excluded.voice_description,
                       voice_src = excluded.voice_src,
+                      download_url = excluded.download_url,
                       is_global = excluded.is_global,
                       created_at = COALESCE(voices.created_at, excluded.created_at),
                       addon_id = COALESCE(voices.addon_id, excluded.addon_id),
@@ -70,24 +66,16 @@ class SeedMixin:
                         str(vname),
                         item.get("voice_description") or item.get("description"),
                         item.get("voice_src") or item.get("src"),
+                        item.get("download_url"),
                         now,
                         now,
                     ),
                 )
 
-        # Sync experiences: core then pack files (fallback to legacy filenames)
+        # Core personalities only (no packs, no games, no stories). Force type='personality'.
         experience_paths: List[Path] = []
-        if (root / "core_personalities.json").exists():
-            experience_paths.append(root / "core_personalities.json")
-        elif (root / "personalities.json").exists():
+        if (root / "personalities.json").exists():
             experience_paths.append(root / "personalities.json")
-        experience_paths.append(root / "packs" / "play_pack" / "personalities.json")
-        experience_paths.append(root / "packs" / "play_pack" / "games.json")
-        experience_paths.append(root / "packs" / "stories_pack" / "stories.json")
-        if not (root / "packs" / "play_pack" / "games.json").exists() and (root / "games.json").exists():
-            experience_paths.append(root / "games.json")
-        if not (root / "packs" / "stories_pack" / "stories.json").exists() and (root / "stories.json").exists():
-            experience_paths.append(root / "stories.json")
 
         for filepath in experience_paths:
             if not filepath.exists():
@@ -107,7 +95,6 @@ class SeedMixin:
                 name = item.get("name")
                 prompt = item.get("prompt")
                 voice_id = item.get("voice_id")
-                exp_type = item.get("type", "personality")
                 if not p_id or not name or not prompt or not voice_id:
                     continue
                 cursor.execute(
@@ -121,7 +108,7 @@ class SeedMixin:
                 cursor.execute(
                     """
                     INSERT INTO personalities (id, name, prompt, short_description, tags, is_visible, voice_id, is_global, img_src, type, created_at, addon_id, is_builtin, updated_at, meta_json)
-                    VALUES (?, ?, ?, ?, ?, 1, ?, 1, ?, ?, ?, NULL, 1, ?, NULL)
+                    VALUES (?, ?, ?, ?, ?, 1, ?, 1, ?, 'personality', ?, NULL, 1, ?, NULL)
                     ON CONFLICT(id) DO UPDATE SET
                       name = excluded.name,
                       prompt = excluded.prompt,
@@ -131,7 +118,7 @@ class SeedMixin:
                       voice_id = excluded.voice_id,
                       is_global = 1,
                       img_src = excluded.img_src,
-                      type = excluded.type,
+                      type = 'personality',
                       created_at = COALESCE(personalities.created_at, excluded.created_at),
                       addon_id = COALESCE(personalities.addon_id, excluded.addon_id),
                       is_builtin = 1,
@@ -145,7 +132,6 @@ class SeedMixin:
                         json.dumps(item.get("tags") or []),
                         str(voice_id),
                         str(item.get("img_src") or ""),
-                        str(exp_type),
                         now,
                         now,
                     ),

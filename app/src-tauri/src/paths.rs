@@ -117,3 +117,56 @@ pub(crate) fn get_venv_pip(app: &AppHandle) -> PathBuf {
         bin.join("pip3")
     }
 }
+
+/// Directory where Tesseract can be installed (app data, not bundled).
+pub(crate) fn get_tesseract_dir(app: &AppHandle) -> PathBuf {
+    get_keero_dir(app).join("tesseract")
+}
+
+/// Path to tesseract binary if available: first app_data/tesseract, then common system paths.
+pub(crate) fn get_tesseract_cmd(app: &AppHandle) -> Option<PathBuf> {
+    let base = get_tesseract_dir(app);
+    #[cfg(target_os = "windows")]
+    {
+        let sub = base.join("win");
+        let exe = sub.join("tesseract.exe");
+        if exe.exists() {
+            return Some(exe);
+        }
+        // Common system install
+        let pf = std::env::var("ProgramFiles").ok().unwrap_or_else(|| "C:\\Program Files".to_string());
+        let sys = std::path::PathBuf::from(pf).join("Tesseract-OCR").join("tesseract.exe");
+        if sys.exists() {
+            return Some(sys);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let sub = base.join("mac");
+        let bin = sub.join("bin").join("tesseract");
+        if bin.exists() {
+            return Some(bin);
+        }
+        let sys = PathBuf::from("/usr/local/bin/tesseract");
+        if sys.exists() {
+            return Some(sys);
+        }
+        let sys2 = PathBuf::from("/opt/homebrew/bin/tesseract");
+        if sys2.exists() {
+            return Some(sys2);
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let sub = base.join("linux");
+        let bin = sub.join("bin").join("tesseract");
+        if bin.exists() {
+            return Some(bin);
+        }
+        let sys = PathBuf::from("/usr/bin/tesseract");
+        if sys.exists() {
+            return Some(sys);
+        }
+    }
+    None
+}

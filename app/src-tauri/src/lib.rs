@@ -29,6 +29,8 @@ pub fn run() {
             models::download_all_models,
             setup::mark_setup_complete,
             setup::is_first_launch,
+            setup::tesseract_status,
+            setup::tesseract_install,
             backend::start_backend,
             voices::save_voice_wav_base64
         ])

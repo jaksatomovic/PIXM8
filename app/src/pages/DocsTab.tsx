@@ -329,13 +329,9 @@ export const DocsTab = () => {
         <div className="retro-card font-mono text-sm py-8 text-center text-[var(--color-retro-fg-secondary)]">
           Loading…
         </div>
-      ) : docs.length === 0 ? (
-        <div className="retro-card font-mono text-sm py-8 text-center text-[var(--color-retro-fg-secondary)]">
-          No documents. Upload a file to get started.
-        </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Card: Add new document */}
+          {/* Card: Add new document - Always visible */}
           <li
             role="button"
             tabIndex={0}
@@ -346,10 +342,7 @@ export const DocsTab = () => {
             className={`retro-card retro-not-selected flex flex-col cursor-pointer transition-shadow hover:shadow-[var(--shadow-retro-hover)] text-left list-none ${uploading ? "opacity-60 pointer-events-none" : ""}`}
             style={{ padding: 0 }}
           >
-            <div
-              className="w-full h-[140px] rounded-t-[24px] bg-orange-50/50 flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]"
-              style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.08) 1px, transparent 1px)", backgroundSize: "6px 6px" }}
-            >
+            <div className="w-full h-[140px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]">
               <FilePlus size={32} className="text-gray-500" />
             </div>
             <div className="min-w-0 flex-1 p-4">

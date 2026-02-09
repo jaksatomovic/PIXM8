@@ -41,14 +41,16 @@ const LayoutInner = () => {
 
   const personalityImageSrc = (p: any) => {
     if (!p) return null;
+    const src = typeof p?.img_src === 'string' ? p.img_src.trim() : '';
+    if (src) {
+      if (/^https?:\/\//i.test(src)) return src;
+      return convertFileSrc(src);
+    }
     if (p?.is_global) {
       const pid = p?.id != null ? String(p.id) : '';
       return pid ? `${GLOBAL_PERSONALITY_IMAGE_BASE_URL}/${encodeURIComponent(pid)}.png` : null;
     }
-    const src = typeof p?.img_src === 'string' ? p.img_src.trim() : '';
-    if (!src) return null;
-    if (/^https?:\/\//i.test(src)) return src;
-    return convertFileSrc(src);
+    return null;
   };
 
   useEffect(() => {
@@ -278,9 +280,6 @@ const LayoutInner = () => {
               {showContextBar && (
                 <div className="retro-card rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1 shrink-0">
-                      <CircleFadingPlus size={14} /> Context
-                    </span>
                     {selectedDocsMeta.map((d) => (
                       <span
                         key={d.id}

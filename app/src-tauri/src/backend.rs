@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
 
-use crate::paths::{get_keero_dir, get_docs_dir, get_images_dir, get_venv_python, get_voices_dir};
+use crate::paths::{get_keero_dir, get_docs_dir, get_images_dir, get_venv_python, get_voices_dir, get_tesseract_cmd};
 
 pub struct ApiProcess(pub Mutex<Option<Child>>);
 
@@ -100,8 +100,8 @@ pub async fn start_backend(app: AppHandle) -> Result<String, String> {
 
     ensure_port_free(8000);
 
-    let child = Command::new(&venv_python)
-        .arg("-m")
+    let mut cmd = Command::new(&venv_python);
+    cmd.arg("-m")
         .arg("uvicorn")
         .arg("server:app")
         .arg("--host")
@@ -116,7 +116,11 @@ pub async fn start_backend(app: AppHandle) -> Result<String, String> {
         .env("TOKENIZERS_PARALLELISM", "false")
         .env("HF_HUB_DISABLE_XET", "1")
         .env("HF_HUB_ENABLE_HF_TRANSFER", "1")
-        .env("PYTHONWARNINGS", "ignore::UserWarning:multiprocessing.resource_tracker")
+        .env("PYTHONWARNINGS", "ignore::UserWarning:multiprocessing.resource_tracker");
+    if let Some(tesseract) = get_tesseract_cmd(&app) {
+        cmd.env("TESSERACT_CMD", tesseract.to_string_lossy().to_string());
+    }
+    let child = cmd
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
@@ -164,8 +168,8 @@ pub fn setup_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
     let keero_docs_dir = get_docs_dir(&app_handle);
     println!("[TAURI] DB Path: {:?}", keero_db_path);
 
-    let child = Command::new(&python_path)
-        .arg("-m")
+    let mut cmd = Command::new(&python_path);
+    cmd.arg("-m")
         .arg("uvicorn")
         .arg("server:app")
         .arg("--host")
@@ -180,7 +184,11 @@ pub fn setup_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
         .env("TOKENIZERS_PARALLELISM", "false")
         .env("HF_HUB_DISABLE_XET", "1")
         .env("HF_HUB_ENABLE_HF_TRANSFER", "1")
-        .env("PYTHONWARNINGS", "ignore::UserWarning:multiprocessing.resource_tracker")
+        .env("PYTHONWARNINGS", "ignore::UserWarning:multiprocessing.resource_tracker");
+    if let Some(tesseract) = get_tesseract_cmd(&app_handle) {
+        cmd.env("TESSERACT_CMD", tesseract.to_string_lossy().to_string());
+    }
+    let child = cmd
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn();

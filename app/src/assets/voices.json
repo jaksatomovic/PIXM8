@@ -1,44 +1,16 @@
 [
   {
-    "voice_id": "crisp_narrator",
-    "gender": "male",
-    "voice_name": "Crisp Narrator",
-    "voice_description": "Clean, neutral narrator voice for clear delivery and general-purpose reading.",
-    "voice_src": "narrator1.wav"
-  },
-  {
-    "voice_id": "warm_narrator",
-    "gender": "male",
-    "voice_name": "Warm Narrator",
-    "voice_description": "Warm, deliberate storyteller voice with a cozy, reassuring tone.",
-    "voice_src": "old_wise_man.wav"
-  },
-  {
-    "voice_id": "friendly_male",
-    "gender": "male",
-    "voice_name": "Friendly Male",
-    "voice_description": "Easygoing, approachable male voice—confident and supportive.",
-    "voice_src": "aussie.wav"
-  },
-  {
-    "voice_id": "friendly_female",
+    "voice_id": "ana",
     "gender": "female",
-    "voice_name": "Friendly Female",
-    "voice_description": "Bright, friendly female voice with a warm and encouraging tone.",
-    "voice_src": "girl2.wav"
+    "voice_name": "Ana",
+    "voice_description": "A clear and expressive female voice, suitable for various conversational contexts.",
+    "download_url": "https://nevsfqx2plvipel2.public.blob.vercel-storage.com/ana.mp3"
   },
   {
-    "voice_id": "radio_host",
+    "voice_id": "marko",
     "gender": "male",
-    "voice_name": "Radio Host",
-    "voice_description": "Confident broadcast-style voice with smooth pacing and clear articulation.",
-    "voice_src": "radio.wav"
-  },
-  {
-    "voice_id": "british_narrator",
-    "gender": "female",
-    "voice_name": "British Narrator",
-    "voice_description": "Polished British narrator with crisp articulation and a composed, professional tone.",
-    "voice_src": "british_woman_narrator.wav"
+    "voice_name": "Marko",
+    "voice_description": "A deep and resonant male voice, suitable for authoritative or calm narration.",
+    "download_url": "https://nevsfqx2plvipel2.public.blob.vercel-storage.com/marko.mp3"
   }
 ]

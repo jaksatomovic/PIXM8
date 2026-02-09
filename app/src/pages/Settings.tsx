@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { api } from '../api';
-import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package, User, Volume2, Settings as SettingsIcon, UserCircle } from 'lucide-react';
+import { RefreshCw, Brain, Radio, MonitorUp, Rss, Zap, Package, User, Volume2, Settings as SettingsIcon, UserCircle, FileText } from 'lucide-react';
 import { ModelSwitchModal } from '../components/ModelSwitchModal';
 import { LlmSelector } from '../components/LlmSelector';
 import { Addons } from '../components/Addons';
@@ -29,15 +30,20 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
     default_profile_id: string | null;
     use_default_voice_everywhere: boolean;
     allow_experience_voice_override: boolean;
+    assistant_language: string | null;
   }>({
     default_voice_id: null,
     default_personality_id: null,
     default_profile_id: null,
     use_default_voice_everywhere: true,
     allow_experience_voice_override: false,
+    assistant_language: null,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tesseractStatus, setTesseractStatus] = useState<{ installed: boolean; path?: string; manual_download_url: string; can_auto_install: boolean } | null>(null);
+  const [tesseractInstalling, setTesseractInstalling] = useState(false);
+  const [tesseractInstallError, setTesseractInstallError] = useState<string | null>(null);
   const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
   const [downloadingVoiceId, setDownloadingVoiceId] = useState<string | null>(null);
   const [audioSrcByVoiceId, setAudioSrcByVoiceId] = useState<Record<string, string>>({});
@@ -60,7 +66,14 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
         const [voicesRes, personalitiesRes, prefsRes, downloadedRes, profilesRes] = await Promise.all([
           api.getVoices(),
           api.getExperiences(false, 'personality'),
-          api.getPreferences().catch(() => ({ default_voice_id: null, default_personality_id: null, use_default_voice_everywhere: true, allow_experience_voice_override: false })),
+          api.getPreferences().catch(() => ({
+            default_voice_id: null,
+            default_personality_id: null,
+            default_profile_id: null,
+            use_default_voice_everywhere: true,
+            allow_experience_voice_override: false,
+            assistant_language: null,
+          })),
           api.listDownloadedVoices(),
           api.getProfiles().catch(() => ({ profiles: [] })),
         ]);
@@ -74,6 +87,7 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
             default_profile_id: (prefsRes as any)?.default_profile_id ?? null,
             use_default_voice_everywhere: (prefsRes as any)?.use_default_voice_everywhere !== false,
             allow_experience_voice_override: !!(prefsRes as any)?.allow_experience_voice_override,
+            assistant_language: (prefsRes as any)?.assistant_language ?? null,
           });
           setDownloadedVoiceIds(new Set(Array.isArray(downloadedRes) ? downloadedRes : []));
         }
@@ -87,6 +101,19 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await invoke<{ installed: boolean; path?: string; manual_download_url: string; can_auto_install: boolean }>('tesseract_status');
+        if (!cancelled) setTesseractStatus(status);
+      } catch {
+        if (!cancelled) setTesseractStatus(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const savePreferences = async (updates: Partial<typeof preferences>) => {
     setSaving(true);
     try {
@@ -97,6 +124,7 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
         default_profile_id: next.default_profile_id ?? undefined,
         use_default_voice_everywhere: next.use_default_voice_everywhere,
         allow_experience_voice_override: next.allow_experience_voice_override,
+        assistant_language: next.assistant_language ?? null,
       });
       setPreferences(next);
     } catch (e: any) {
@@ -247,6 +275,28 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
         </div>
 
         <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
+          <h3 className="font-bold uppercase text-lg">Assistant language</h3>
+          <p className="text-xs text-gray-600">
+            Choose the primary language for the assistant&apos;s replies. This influences how the AI responds, independently of the voice.
+          </p>
+          <select
+            className="retro-input w-full max-w-md"
+            value={preferences.assistant_language ?? 'auto'}
+            onChange={(e) => {
+              const v = e.target.value || 'auto';
+              const normalized = v === 'auto' ? null : v;
+              setPreferences((p) => ({ ...p, assistant_language: normalized }));
+              savePreferences({ assistant_language: normalized });
+            }}
+            disabled={saving}
+          >
+            <option value="auto">Auto (follow conversation)</option>
+            <option value="en">English</option>
+            <option value="hr">Hrvatski</option>
+          </select>
+        </div>
+
+        <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
           <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
             <UserCircle className="w-5 h-5" />
             Profiles (voice + personality)
@@ -269,6 +319,65 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
                 <option key={pr.id} value={pr.id}>{pr.name}</option>
               ))}
             </select>
+          )}
+        </div>
+
+        <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
+          <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
+            <FileText className="w-5 h-5" />
+            OCR (Tesseract) for images
+          </h3>
+          <p className="text-xs text-gray-600">
+            To extract text from uploaded images in Docs, Tesseract must be installed. We don&apos;t bundle it to keep the app size small. Install it once and the app will use it automatically.
+          </p>
+          {tesseractStatus === null ? (
+            <p className="text-sm text-gray-500">Checking Tesseract…</p>
+          ) : tesseractStatus.installed ? (
+            <p className="text-sm text-green-700 dark:text-green-400">
+              Tesseract is available{tesseractStatus.path ? ` at ${tesseractStatus.path}` : ''}. OCR for images in Docs is enabled.
+            </p>
+          ) : (
+            <div className="text-sm space-y-2">
+              <p className="text-gray-600">Tesseract is not installed. Enable OCR by installing it once; the app will use it automatically.</p>
+              {tesseractInstallError && (
+                <p className="text-red-600 dark:text-red-400 text-xs">{tesseractInstallError}</p>
+              )}
+              <div className="flex flex-wrap gap-2 items-center">
+                {tesseractStatus.can_auto_install && (
+                  <button
+                    type="button"
+                    className="retro-btn inline-flex items-center gap-2"
+                    disabled={tesseractInstalling}
+                    onClick={async () => {
+                      setTesseractInstallError(null);
+                      setTesseractInstalling(true);
+                      try {
+                        await invoke('tesseract_install');
+                        const status = await invoke<{ installed: boolean; path?: string; manual_download_url: string; can_auto_install: boolean }>('tesseract_status');
+                        setTesseractStatus(status);
+                      } catch (e: unknown) {
+                        setTesseractInstallError(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setTesseractInstalling(false);
+                      }
+                    }}
+                  >
+                    {tesseractInstalling ? 'Installing…' : 'Install Tesseract (via Homebrew)'}
+                  </button>
+                )}
+                <a
+                  href={tesseractStatus.manual_download_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="retro-btn retro-btn-outline inline-flex items-center gap-2"
+                >
+                  Open install instructions
+                </a>
+              </div>
+              {!tesseractStatus.can_auto_install && (
+                <p className="text-xs text-gray-500">On Windows and Linux, install Tesseract manually using the link above.</p>
+              )}
+            </div>
           )}
         </div>
       </div>

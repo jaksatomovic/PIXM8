@@ -1,7 +1,7 @@
 """Schema creation and migrations. Uses app_state.schema_version for versioning."""
 from sqlite3 import Connection
 
-TARGET_SCHEMA_VERSION = 6
+TARGET_SCHEMA_VERSION = 8
 
 
 def _column_exists(conn: Connection, table: str, column: str) -> bool:
@@ -138,6 +138,14 @@ def run_migrations(conn: Connection) -> None:
         elif current == 5:
             _migrate_v5_to_v6(conn)
             current = 6
+            set_schema_version(conn, current)
+        elif current == 6:
+            _migrate_v6_to_v7(conn)
+            current = 7
+            set_schema_version(conn, current)
+        elif current == 7:
+            _migrate_v7_to_v8(conn)
+            current = 8
             set_schema_version(conn, current)
         else:
             break
@@ -369,6 +377,43 @@ def _migrate_v5_to_v6(conn: Connection) -> None:
             new_json = json.dumps(prefs)
             conn.execute("UPDATE users SET settings_json = ? WHERE id = ?", (new_json, user_id))
 
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def _migrate_v6_to_v7(conn: Connection) -> None:
+    """Add user_faces table for face recognition (one or more photos per user)."""
+    conn.rollback()
+    conn.execute("BEGIN TRANSACTION")
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_faces (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              local_path TEXT NOT NULL,
+              created_at REAL NOT NULL,
+              FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            """
+        )
+        if not _index_exists(conn, "idx_user_faces_user_id"):
+            conn.execute("CREATE INDEX idx_user_faces_user_id ON user_faces(user_id)")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def _migrate_v7_to_v8(conn: Connection) -> None:
+    """Add download_url column to voices table for remote voice file URLs."""
+    conn.rollback()
+    conn.execute("BEGIN TRANSACTION")
+    try:
+        if not _column_exists(conn, "voices", "download_url"):
+            conn.execute("ALTER TABLE voices ADD COLUMN download_url TEXT")
         conn.execute("COMMIT")
     except Exception:
         conn.execute("ROLLBACK")

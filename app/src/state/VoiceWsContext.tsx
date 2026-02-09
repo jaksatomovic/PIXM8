@@ -108,15 +108,17 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
   const GLOBAL_PERSONALITY_IMAGE_BASE_URL = "https://pub-a64cd21521e44c81a85db631f1cdaacc.r2.dev";
 
   const imageSrcForPersonality = (p: any) => {
+    const src = typeof p?.img_src === "string" ? p.img_src.trim() : "";
+    if (src) {
+      if (/^https?:\/\//i.test(src)) return src;
+      return convertFileSrc(src);
+    }
     if (p?.is_global) {
       const personalityId = p?.id != null ? String(p.id) : "";
       if (!personalityId) return null;
       return `${GLOBAL_PERSONALITY_IMAGE_BASE_URL}/${encodeURIComponent(personalityId)}.png`;
     }
-    const src = typeof p?.img_src === "string" ? p.img_src.trim() : "";
-    if (!src) return null;
-    if (/^https?:\/\//i.test(src)) return src;
-    return convertFileSrc(src);
+    return null;
   };
 
   const base64EncodeBytes = (bytes: Uint8Array) => {
