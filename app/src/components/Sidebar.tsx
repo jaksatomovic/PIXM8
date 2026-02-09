@@ -1,9 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, User, LockKeyhole, Volume2, Settings, History, Plus, Home, Dot, Package, UserCircle, AudioWaveform } from 'lucide-react';
+import { Users, User, LockKeyhole, Settings, History, Plus, Home, Dot, Package, AudioWaveform, Bot } from 'lucide-react';
 import clsx from 'clsx';
-import { useActiveUser } from '../state/ActiveUserContext';
-import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { useState } from 'react';
 import { Logo } from './Logo';
 import elatoPng from '../assets/device.png';
 import { Modal } from './Modal';
@@ -57,50 +55,7 @@ const NavItem = ({
 
 export const Sidebar = () => {
   const navigate = useNavigate();
-  const { activeUser } = useActiveUser();
-  const [_activePersonalityName, setActivePersonalityName] = useState<string | null>(null);
-  const [activeExperienceId, setActiveExperienceId] = useState<string | null>(null);
-  const [activeExperienceType, setActiveExperienceType] = useState<string | null>(null);
-  const [_deviceConnected, setDeviceConnected] = useState<boolean>(false);
-  const [_deviceSessionId, setDeviceSessionId] = useState<string | null>(null);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const ds = { connected: false, session_id: null };
-        // const ds = await api.getDeviceStatus().catch(() => ({ connected: false, session_id: null }));
-        if (!cancelled) {
-          setDeviceConnected(!!ds?.connected);
-          setDeviceSessionId(ds?.session_id || null);
-        }
-
-        const selectedId = activeUser?.current_personality_id;
-        if (!selectedId) {
-          if (!cancelled) setActivePersonalityName(null);
-          if (!cancelled) {
-            setActiveExperienceId(null);
-            setActiveExperienceType(null);
-          }
-          return;
-        }
-
-        const ps = await api.getPersonalities(true).catch(() => []);
-        const selected = ps.find((p: any) => p.id === selectedId);
-        if (!cancelled) {
-          setActivePersonalityName(selected?.name || null);
-          setActiveExperienceId(selected?.id ? String(selected.id) : null);
-          setActiveExperienceType(selected?.type ? String(selected.type) : null);
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    load();
-  }, [activeUser?.current_personality_id]);
 
   return (
     <div className="w-68 shrink-0 bg-transparent p-6 flex flex-col gap-6 h-full overflow-y-auto overscroll-contain justify-between">
@@ -122,19 +77,15 @@ export const Sidebar = () => {
               </button>
             </div>
             <NavItem
-              to={
-                activeExperienceId && activeExperienceType
-                  ? `/?tab=${encodeURIComponent(activeExperienceType)}&focus=${encodeURIComponent(activeExperienceId)}`
-                  : "/"
-              }
+              to="/"
               icon={Home}
               label="Home"
               matchPath="/"
             />
-            <NavItem to="/packs" icon={Package} label="Packs" />
-            <NavItem to="/profiles" icon={UserCircle} label="Profiles" />
-            <NavItem to="/personalities" icon={User} label="Personalities" />
             <NavItem to="/voices" icon={AudioWaveform} label="Voices" />
+            <NavItem to="/profiles" icon={Bot} label="Characters" />
+            <NavItem to="/personalities" icon={User} label="Personalities" />
+            <NavItem to="/packs" icon={Package} label="Packs" />
             <div className="grid grid-cols-3 gap-2 px-3 pb-3 w-full mt-3">
               <NavItem
                 to="/conversations"

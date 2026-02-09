@@ -1,26 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { Image as ImageIcon, Pencil, Trash2, MessageCircle, Maximize2, Gamepad2, FileText } from 'lucide-react';
+import { Image as ImageIcon, Pencil, Trash2, MessageCircle, Maximize2, FileText, Bot } from 'lucide-react';
 import { useActiveUser } from '../state/ActiveUserContext';
 import { ExperienceModal, ExperienceForModal } from '../components/ExperienceModal';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { VoiceActionButtons } from '../components/VoiceActionButtons';
 import { useVoicePlayback } from '../hooks/useVoicePlayback';
 import { Modal } from '../components/Modal';
 import { DocsTab } from './DocsTab';
 
-type ExperienceType = 'personality' | 'game' | 'story' | 'docs';
+type ExperienceType = 'personality' | 'docs';
 
 const TAB_CONFIG: { id: ExperienceType; label: string; icon: typeof MessageCircle }[] = [
-  { id: 'docs', label: 'Docs', icon: FileText },
   { id: 'personality', label: 'Chat', icon: MessageCircle },
+  { id: 'docs', label: 'Docs', icon: FileText },
 ];
 
 const VALID_TABS: ExperienceType[] = ['personality', 'docs'];
 
 export const Playground = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const tabParam = (searchParams.get('tab') as ExperienceType) || 'personality';
   const initialTab = VALID_TABS.includes(tabParam) ? tabParam : 'personality';
   const [activeTab, setActiveTab] = useState<ExperienceType>(initialTab);
@@ -33,6 +34,7 @@ export const Playground = () => {
   const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
   const [downloadingVoiceId, setDownloadingVoiceId] = useState<string | null>(null);
   const [audioSrcByVoiceId, setAudioSrcByVoiceId] = useState<Record<string, string>>({});
+  const [profiles, setProfiles] = useState<Array<{ id: string; name: string; voice_id: string; personality_id: string }>>([]);
 
   const { playingVoiceId, isPaused, toggle: toggleVoice } = useVoicePlayback(async (voiceId) => {
     let src = audioSrcByVoiceId[voiceId];
@@ -52,7 +54,7 @@ export const Playground = () => {
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoExperience, setInfoExperience] = useState<any | null>(null);
 
-  const { activeUserId, activeUser, refreshUsers } = useActiveUser();
+  const { activeUserId } = useActiveUser();
 
   const GLOBAL_IMAGE_BASE_URL = 'https://pub-a64cd21521e44c81a85db631f1cdaacc.r2.dev';
 
@@ -175,6 +177,25 @@ export const Playground = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadProfiles = async () => {
+      try {
+        const res = await api.getProfiles().catch(() => ({ profiles: [] }));
+        if (!cancelled) {
+          const list = (res as any)?.profiles ?? [];
+          setProfiles(Array.isArray(list) ? list : []);
+        }
+      } catch {
+        if (!cancelled) setProfiles([]);
+      }
+    };
+    loadProfiles();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const voiceById = useMemo(() => {
     const m = new Map<string, any>();
     for (const v of voices) {
@@ -215,24 +236,10 @@ export const Playground = () => {
     }
   };
 
-  const assignToActiveUser = async (experienceId: string) => {
-    if (!activeUserId) {
-      setError('Select a member first: go to Members and click a member to set them active.');
-      return;
-    }
-    try {
-      setError(null);
-      await api.updateUser(activeUserId, { current_personality_id: experienceId });
-      await refreshUsers();
-      try {
-        await api.setAppMode('chat');
-      } catch {
-        // non-blocking
-      }
-    } catch (e: any) {
-      const msg = e?.message || '';
-      setError(msg === 'Not Found' ? 'User not found. Try selecting a member in Members first.' : (msg || 'Failed to assign experience'));
-    }
+  const assignToActiveUser = () => {
+    // Chat is now driven by Characters (profiles), not direct personality assignment.
+    // Redirect to Characters page to select or create a character.
+    navigate('/profiles');
   };
 
   const deleteExperience = async (p: any) => {
@@ -344,7 +351,22 @@ export const Playground = () => {
         <>
       {!activeUserId && !loading && (
         <div className="retro-card font-mono text-sm mb-4" style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}>
-          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then click a character to start chatting.
+          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then choose a character to start chatting.
+        </div>
+      )}
+      {activeUserId && profiles.length === 0 && !loading && (
+        <div className="retro-card font-mono text-sm mb-4" style={{ backgroundColor: 'rgba(124, 141, 255, 0.15)', border: '1px solid rgba(124, 141, 255, 0.4)' }}>
+          <div className="flex items-center gap-3 mb-2">
+            <Bot size={20} />
+            <span className="font-bold">Start chat with a Character</span>
+          </div>
+          <p className="text-sm mb-3">
+            Chat is driven by Characters (voice + personality pairs). Create your first character or choose an existing one.
+          </p>
+          <Link to="/profiles" className="retro-btn inline-flex items-center gap-2">
+            <Bot size={16} />
+            Go to Characters
+          </Link>
         </div>
       )}
       {loading && (
@@ -366,11 +388,11 @@ export const Playground = () => {
             id={`experience-${p.id}`}
             role="button"
             tabIndex={0}
-            onClick={() => assignToActiveUser(p.id)}
+            onClick={() => assignToActiveUser()}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') assignToActiveUser(p.id);
+              if (e.key === 'Enter' || e.key === ' ') assignToActiveUser();
             }}
-            className={`retro-card relative group text-left cursor-pointer transition-shadow flex flex-col ${activeUser?.current_personality_id === p.id ? 'retro-selected' : 'retro-not-selected'}`}
+            className="retro-card relative group text-left cursor-pointer transition-shadow flex flex-col"
 style={{
   padding: "0rem"
 }}

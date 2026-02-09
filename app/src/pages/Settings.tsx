@@ -299,11 +299,17 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
         <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
           <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
             <UserCircle className="w-5 h-5" />
-            Profiles (voice + personality)
+            Characters (voice + personality)
           </h3>
-          <p className="text-xs text-gray-600">Set the default profile for the device. Create new profiles on the <a href="/profiles" className="underline font-medium">Profiles</a> page.</p>
+          <p className="text-xs text-gray-600">
+            Set the default character for the device. Create and manage characters on the{" "}
+            <a href="/profiles" className="underline font-medium">Characters</a> page.
+          </p>
           {profiles.length === 0 ? (
-            <p className="text-sm text-gray-500">No profiles yet. Create one on the <a href="/profiles" className="underline font-medium">Profiles</a> page.</p>
+            <p className="text-sm text-gray-500">
+              No characters yet. Create one on the{" "}
+              <a href="/profiles" className="underline font-medium">Characters</a> page.
+            </p>
           ) : (
             <select
               className="retro-input w-full max-w-md"
@@ -314,7 +320,7 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
               }}
               disabled={saving}
             >
-              <option value="">— Default profile —</option>
+              <option value="">— Default character —</option>
               {profiles.map((pr) => (
                 <option key={pr.id} value={pr.id}>{pr.name}</option>
               ))}

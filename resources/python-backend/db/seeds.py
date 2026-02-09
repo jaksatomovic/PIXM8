@@ -14,7 +14,6 @@ class SeedMixin:
     def sync_global_voices_and_experiences(self) -> None:
         """Seed ONLY core voices and core personalities at startup.
         Packs are NOT seeded; user must install them from Packs UI.
-        Core: core_voices.json (fallback voices.json), core_personalities.json (fallback personalities.json).
         Only type='personality' is seeded; no games or stories.
         """
         root = assets_dir()

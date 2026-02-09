@@ -288,8 +288,8 @@ export const Conversations = () => {
                 Chat with the models to create a conversation, then come back here to view it.
               </div>
               <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
-                <button type="button" className="retro-btn" onClick={() => navigate('/')}>
-                  Choose 
+                <button type="button" className="retro-btn" onClick={() => navigate('/?tab=personality')}>
+                  Go to Chat
                 </button>
                 <button type="button" className="retro-btn retro-btn-outline bg-white" onClick={loadSessions}>
                   Refresh

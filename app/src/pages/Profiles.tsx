@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useActiveUser } from '../state/ActiveUserContext';
-import { UserCircle, Plus } from 'lucide-react';
+import { Bot, Plus } from 'lucide-react';
 import { Modal } from '../components/Modal';
 
 type ActiveSession = {
@@ -33,6 +33,7 @@ export const ProfilesPage = () => {
   const [newProfilePersonalityId, setNewProfilePersonalityId] = useState('');
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
 
   const loadActiveSession = async () => {
     try {
@@ -67,14 +68,19 @@ export const ProfilesPage = () => {
     const load = async () => {
       try {
         setError(null);
-        const [voicesRes, prefs, active, exps] = await Promise.all([
+        const [voicesRes, prefs, active, exps, downloadedRes] = await Promise.all([
           api.getVoices().catch(() => []),
           api.getPreferences().catch(() => ({ default_profile_id: null })),
           api.getActiveSession().catch(() => null),
           api.getExperiences(false, 'personality').catch(() => []),
+          api.listDownloadedVoices().catch(() => []),
         ]);
         if (!cancelled) {
-          setVoices(Array.isArray(voicesRes) ? voicesRes : []);
+          const downloaded = new Set(Array.isArray(downloadedRes) ? downloadedRes : []);
+          setDownloadedVoiceIds(downloaded);
+          const voiceList = Array.isArray(voicesRes) ? voicesRes : [];
+          // Only allow downloaded voices when creating characters, so chat always has a usable voice.
+          setVoices(voiceList.filter((v: any) => downloaded.has(String(v.voice_id))));
           setPreferences({ default_profile_id: (prefs as any)?.default_profile_id ?? null });
           setPersonalities(Array.isArray(exps) ? exps : []);
           if (active) {
@@ -95,7 +101,7 @@ export const ProfilesPage = () => {
           if (!cancelled && Array.isArray((profRes as any)?.profiles)) setProfiles((profRes as any).profiles);
         }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Failed to load profiles');
+        if (!cancelled) setError(e?.message || 'Failed to load characters');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -151,8 +157,8 @@ export const ProfilesPage = () => {
       await loadProfiles();
       await loadActiveSession();
     } catch (e: any) {
-      console.error('Create profile failed', e);
-      const msg = e?.message || 'Failed to create profile.';
+      console.error('Create character failed', e);
+      const msg = e?.message || 'Failed to create character.';
       setCreateError(
         e?.status === 404
           ? 'Profiles API not found. Restart the app (close and run again) so the backend uses the latest code.'
@@ -167,11 +173,11 @@ export const ProfilesPage = () => {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-black flex items-center gap-3">
-          <UserCircle className="w-7 h-7" />
-          Profiles
+          <Bot className="w-7 h-7" />
+          Characters
         </h1>
         <div className="retro-card font-mono text-sm py-12 text-center text-[var(--color-retro-fg-secondary)]">
-          Loading profiles…
+          Loading characters…
         </div>
       </div>
     );
@@ -181,8 +187,8 @@ export const ProfilesPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-black flex items-center gap-3">
-          <UserCircle className="w-7 h-7" />
-          Profiles
+          <Bot className="w-7 h-7" />
+          Characters
         </h1>
         <button
           type="button"
@@ -196,14 +202,14 @@ export const ProfilesPage = () => {
           }}
         >
           <Plus size={16} />
-          Create profile
+          Create character
         </button>
       </div>
 
       <Modal
         open={createModalOpen}
-        icon={<UserCircle size={24} />}
-        title="Create profile"
+        icon={<Bot size={24} />}
+        title="Create character"
         onClose={() => setCreateModalOpen(false)}
         panelClassName="w-full max-w-lg"
       >
@@ -213,7 +219,7 @@ export const ProfilesPage = () => {
         <div className="flex flex-col gap-4">
           <input
             type="text"
-            placeholder="Profile name"
+            placeholder="Character name"
             value={newProfileName}
             onChange={(e) => setNewProfileName(e.target.value)}
             className="retro-input w-full"
@@ -223,7 +229,7 @@ export const ProfilesPage = () => {
             value={newProfileVoiceId}
             onChange={(e) => setNewProfileVoiceId(e.target.value)}
           >
-            <option value="">— Voice —</option>
+            <option value="">— Voice (downloaded) —</option>
             {voices.map((v) => (
               <option key={v.voice_id} value={v.voice_id}>{v.voice_name}</option>
             ))}
@@ -260,7 +266,7 @@ export const ProfilesPage = () => {
           className="retro-card font-mono text-sm mb-4"
           style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}
         >
-          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then use &quot;Use for this session&quot; to start chatting with a profile.
+          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then use &quot;Use for this session&quot; to start chatting with a character.
         </div>
       )}
 
@@ -269,12 +275,21 @@ export const ProfilesPage = () => {
       )}
 
       <p className="text-sm text-gray-600">
-        Saved voice + personality pairs for the robot. Use for this session or set as default for device. Create a new profile with the button above.
+        Saved voice + personality pairs for the robot. Use for this session or set as default for device. Create a new character with the button above.
       </p>
+
+      {downloadedVoiceIds.size === 0 && (
+        <div
+          className="retro-card font-mono text-sm mb-4"
+          style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}
+        >
+          Download at least one voice on the <Link to="/voices" className="underline font-bold">Voices</Link> page before creating a character.
+        </div>
+      )}
 
       {profiles.length === 0 ? (
         <div className="retro-card font-mono text-sm py-6 text-center text-[var(--color-retro-fg-secondary)]">
-          No profiles yet. Click Create profile above to add one.
+          No characters yet. Click Create character above to add one.
         </div>
       ) : (
         <ul className="space-y-2">
