@@ -247,7 +247,7 @@ export const PacksPage = () => {
   const localAvailable = localCatalog.filter((item) => !installedIds.has(item.id));
 
   return (
-    <div className="space-y-6">
+    <div>
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-black flex items-center gap-3">
           <Package className="w-7 h-7" />
@@ -274,6 +274,7 @@ export const PacksPage = () => {
         </div>
       </div>
 
+      <div className="pt-8 space-y-6">
       <input
         ref={fileInputRef}
         type="file"
@@ -303,7 +304,7 @@ export const PacksPage = () => {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Card: Add your own pack (install from file) */}
           <div
             role="button"
@@ -333,13 +334,13 @@ export const PacksPage = () => {
           </div>
 
           {/* Section label: Available Packs (Local) */}
-          {localAvailable.length > 0 && (
+          {/* {localAvailable.length > 0 && (
             <div className="col-span-full">
               <h2 className="text-lg font-bold uppercase tracking-wider text-gray-500">
                 Available Packs (Local)
               </h2>
             </div>
-          )}
+          )} */}
           {/* Available Packs (Local) – install from assets */}
           {localAvailable.map((item) => {
             const src = imgSrcFor(item);
@@ -535,6 +536,7 @@ export const PacksPage = () => {
           );
           })}
         </div>
+      </div>
     </div>
   );
 };

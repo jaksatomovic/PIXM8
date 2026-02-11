@@ -10,7 +10,12 @@ import { useActiveUser } from '../state/ActiveUserContext';
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 
-export const Conversations = () => {
+type ConversationsProps = {
+  /** When true, hide the "CONVERSATIONS" page header (e.g. when embedded in Home Chat tab). */
+  noHeader?: boolean;
+};
+
+export const Conversations = ({ noHeader }: ConversationsProps) => {
   const navigate = useNavigate();
   const { activeUser } = useActiveUser();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -192,9 +197,33 @@ export const Conversations = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="text-3xl font-black">CONVERSATIONS</h2>
-        {selectedSessionId && (
+      {!noHeader && (
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-black">CONVERSATIONS</h2>
+          {selectedSessionId && (
+            <button
+              type="button"
+              className="retro-btn retro-btn-outline bg-white"
+              onClick={() => {
+                setSelectedSessionId(null);
+                setThread([]);
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete('session');
+                  return next;
+                });
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <ArrowLeft size={16} />
+                Back
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+      {noHeader && selectedSessionId && (
+        <div className="flex justify-end mb-4">
           <button
             type="button"
             className="retro-btn retro-btn-outline bg-white"
@@ -213,8 +242,8 @@ export const Conversations = () => {
               Back
             </span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {loading && (
         <div className="retro-card font-mono text-sm mb-4">Loading…</div>

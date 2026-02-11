@@ -32,6 +32,7 @@ export const VoicesPage = () => {
   };
 
   const [createVoiceOpen, setCreateVoiceOpen] = useState(false);
+  const [defaultVoiceId, setDefaultVoiceId] = useState<string | null>(null);
 
   const [createStartOpen, setCreateStartOpen] = useState(false);
   const [createExperienceOpen, setCreateExperienceOpen] = useState(false);
@@ -101,6 +102,34 @@ export const VoicesPage = () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPrefs = async () => {
+      try {
+        const prefs = await api.getPreferences().catch(() => null);
+        if (!cancelled && prefs && typeof (prefs as any)?.default_voice_id === "string") {
+          setDefaultVoiceId((prefs as any).default_voice_id);
+        } else if (!cancelled) {
+          setDefaultVoiceId(null);
+        }
+      } catch {
+        if (!cancelled) setDefaultVoiceId(null);
+      }
+    };
+    loadPrefs();
+    return () => { cancelled = true; };
+  }, []);
+
+  const setDefaultVoice = async (voiceId: string) => {
+    try {
+      await api.setPreferences({ default_voice_id: voiceId });
+      setDefaultVoiceId(voiceId);
+    } catch (e: any) {
+      console.error("Set default voice failed", e);
+      setError(e?.message || "Failed to set default voice");
+    }
+  };
 
   useEffect(() => {
     const create = searchParams.get("create");
@@ -217,6 +246,35 @@ export const VoicesPage = () => {
 
       {loading && <div className="retro-card font-mono text-sm mb-4">Loading…</div>}
       {error && <div className="retro-card font-mono text-sm mb-4">{error}</div>}
+
+      {!loading && voices.length > 0 && (
+        <div className="retro-card font-mono text-sm mb-4 p-4">
+          <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+            Default voice (used for chat)
+          </label>
+          <select
+            className="retro-input w-full max-w-md"
+            value={defaultVoiceId ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v) setDefaultVoice(v);
+            }}
+          >
+            <option value="">— Choose default voice —</option>
+            {sortedVoices
+              .filter((v) => downloadedVoiceIds.has(String(v.voice_id)))
+              .map((v) => (
+                <option key={v.voice_id} value={v.voice_id}>
+                  {v.voice_name || v.voice_id}
+                  {defaultVoiceId === v.voice_id ? " (default)" : ""}
+                </option>
+              ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-2">
+            Only downloaded voices can be set as default. This voice is used for TTS in chat.
+          </p>
+        </div>
+      )}
 
       {!loading && !error && voices.length === 0 && (
         <div className="retro-card font-mono text-sm mb-4">No voices found.</div>

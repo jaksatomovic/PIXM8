@@ -15,7 +15,7 @@
     "mac:release:dmg": "npm run tauri:build:dmg && npm run mac:notarize:dmg && npm run mac:verify:dmg"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/api": "~2.9.0",
     "@tauri-apps/plugin-opener": "^2.5.3",
     "clsx": "^2.1.1",
     "emoji-picker-element": "^1.28.1",

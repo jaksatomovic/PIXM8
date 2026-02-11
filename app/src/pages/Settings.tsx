@@ -48,6 +48,17 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
   const [downloadingVoiceId, setDownloadingVoiceId] = useState<string | null>(null);
   const [audioSrcByVoiceId, setAudioSrcByVoiceId] = useState<Record<string, string>>({});
 
+  const [ttsBackend, setTtsBackend] = useState<'chatterbox' | 'elevenlabs'>('chatterbox');
+  const [elevenApiKey, setElevenApiKey] = useState('');
+  const [elevenVoiceId, setElevenVoiceId] = useState('');
+  const [elevenModelId, setElevenModelId] = useState('eleven_multilingual_v2');
+  const [elevenOutputFormat, setElevenOutputFormat] = useState('pcm_24000');
+  const [elevenLatency, setElevenLatency] = useState('2');
+
+  const [llmBackend, setLlmBackend] = useState<'local' | 'openai'>('local');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [openaiModelId, setOpenaiModelId] = useState('gpt-4o-mini');
+
   const { playingVoiceId, isPaused, toggle: toggleVoice } = useVoicePlayback(async (voiceId) => {
     let src = audioSrcByVoiceId[voiceId];
     if (!src) {
@@ -63,7 +74,22 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const [voicesRes, personalitiesRes, prefsRes, downloadedRes, profilesRes] = await Promise.all([
+        const [
+          voicesRes,
+          personalitiesRes,
+          prefsRes,
+          downloadedRes,
+          profilesRes,
+          ttsBackendSetting,
+          elevenApiKeySetting,
+          elevenVoiceIdSetting,
+          elevenModelIdSetting,
+          elevenOutputFormatSetting,
+          elevenLatencySetting,
+          llmBackendSetting,
+          openaiApiKeySetting,
+          openaiModelIdSetting,
+        ] = await Promise.all([
           api.getVoices(),
           api.getExperiences(false, 'personality'),
           api.getPreferences().catch(() => ({
@@ -76,6 +102,15 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
           })),
           api.listDownloadedVoices(),
           api.getProfiles().catch(() => ({ profiles: [] })),
+          api.getSetting('tts_backend').catch(() => ({ key: 'tts_backend', value: 'chatterbox' })),
+          api.getSetting('elevenlabs_api_key').catch(() => ({ key: 'elevenlabs_api_key', value: '' })),
+          api.getSetting('elevenlabs_voice_id').catch(() => ({ key: 'elevenlabs_voice_id', value: '' })),
+          api.getSetting('elevenlabs_model_id').catch(() => ({ key: 'elevenlabs_model_id', value: 'eleven_multilingual_v2' })),
+          api.getSetting('elevenlabs_output_format').catch(() => ({ key: 'elevenlabs_output_format', value: 'pcm_24000' })),
+          api.getSetting('elevenlabs_optimize_streaming_latency').catch(() => ({ key: 'elevenlabs_optimize_streaming_latency', value: '2' })),
+          api.getSetting('llm_backend').catch(() => ({ key: 'llm_backend', value: 'local' })),
+          api.getSetting('openai_api_key').catch(() => ({ key: 'openai_api_key', value: '' })),
+          api.getSetting('openai_model_id').catch(() => ({ key: 'openai_model_id', value: 'gpt-4o-mini' })),
         ]);
         if (!cancelled) {
           setVoices(Array.isArray(voicesRes) ? voicesRes : []);
@@ -90,6 +125,20 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
             assistant_language: (prefsRes as any)?.assistant_language ?? null,
           });
           setDownloadedVoiceIds(new Set(Array.isArray(downloadedRes) ? downloadedRes : []));
+
+          const backendRaw = (ttsBackendSetting as any)?.value || 'chatterbox';
+          const normalizedBackend = String(backendRaw).trim().toLowerCase() === 'elevenlabs' ? 'elevenlabs' : 'chatterbox';
+          setTtsBackend(normalizedBackend);
+          setElevenApiKey(String((elevenApiKeySetting as any)?.value || ''));
+          setElevenVoiceId(String((elevenVoiceIdSetting as any)?.value || ''));
+          setElevenModelId(String((elevenModelIdSetting as any)?.value || 'eleven_multilingual_v2'));
+          setElevenOutputFormat(String((elevenOutputFormatSetting as any)?.value || 'pcm_24000'));
+          setElevenLatency(String((elevenLatencySetting as any)?.value ?? '2'));
+
+          const llmRaw = (llmBackendSetting as any)?.value || 'local';
+          setLlmBackend(String(llmRaw).trim().toLowerCase() === 'openai' ? 'openai' : 'local');
+          setOpenaiApiKey(String((openaiApiKeySetting as any)?.value || ''));
+          setOpenaiModelId(String((openaiModelIdSetting as any)?.value || 'gpt-4o-mini'));
         }
       } catch (e) {
         console.error('Personalization load failed', e);
@@ -182,96 +231,193 @@ function PersonalizationTab({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
       <div className="retro-card space-y-8">
-        <div className="space-y-4">
+        {/* Voice / TTS backend */}
+        <div className="space-y-4  border-[var(--color-retro-border)]">
           <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
             <Volume2 className="w-5 h-5" />
-            Default Voice
+            Voice / TTS Backend
           </h3>
-          <p className="text-xs text-gray-600">Used for chat, stories, and games unless you allow experience override.</p>
-          <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs text-gray-600">
+            Choose between fully local Chatterbox TTS or ElevenLabs cloud TTS. Changes apply immediately; no restart required.
+          </p>
+          <div className="space-y-3">
+            <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)]">
+              Backend
+            </label>
             <select
-              className="retro-input flex-1 min-w-[200px]"
-              value={preferences.default_voice_id ?? ''}
+              className="retro-input w-full max-w-sm"
+              value={ttsBackend}
               onChange={(e) => {
-                const v = e.target.value || null;
-                setPreferences((p) => ({ ...p, default_voice_id: v }));
-                savePreferences({ default_voice_id: v });
+                const next = e.target.value === 'elevenlabs' ? 'elevenlabs' : 'chatterbox';
+                setTtsBackend(next);
+                api.setSetting('tts_backend', next).catch(console.error);
               }}
-              disabled={saving}
             >
-              <option value="">— Use first available —</option>
-              {voices.map((v) => (
-                <option key={v.voice_id} value={v.voice_id}>
-                  {v.voice_name} {!(v as any).is_downloaded && !downloadedVoiceIds.has(v.voice_id) ? '(download to use)' : ''}
-                </option>
-              ))}
+              <option value="chatterbox">Local (Chatterbox)</option>
+              <option value="elevenlabs">ElevenLabs (Cloud)</option>
             </select>
-            {preferences.default_voice_id && (
-              <VoiceActionButtons
-                voiceId={preferences.default_voice_id}
-                isDownloaded={(voices.find((x) => x.voice_id === preferences.default_voice_id) as any)?.is_downloaded ?? downloadedVoiceIds.has(preferences.default_voice_id ?? '')}
-                downloadingVoiceId={downloadingVoiceId}
-                onDownload={downloadVoice}
-                onTogglePlay={(id) => toggleVoice(id)}
-                isPlaying={playingVoiceId === preferences.default_voice_id}
-                isPaused={isPaused}
-                size="small"
-              />
-            )}
           </div>
+
+          {ttsBackend === 'elevenlabs' && (
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)] mb-1">
+                  ElevenLabs API Key
+                </label>
+                <input
+                  type="password"
+                  className="retro-input w-full max-w-md"
+                  value={elevenApiKey}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setElevenApiKey(v);
+                    api.setSetting('elevenlabs_api_key', v || null).catch(console.error);
+                  }}
+                  placeholder="sk-..."
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)] mb-1">
+                  Voice ID
+                </label>
+                <input
+                  type="text"
+                  className="retro-input w-full max-w-md"
+                  value={elevenVoiceId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setElevenVoiceId(v);
+                    api.setSetting('elevenlabs_voice_id', v || null).catch(console.error);
+                  }}
+                  placeholder="ElevenLabs voice ID"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)] mb-1">
+                    Model
+                  </label>
+                  <select
+                    className="retro-input w-full"
+                    value={elevenModelId}
+                    onChange={(e) => {
+                      const v = e.target.value || 'eleven_multilingual_v2';
+                      setElevenModelId(v);
+                      api.setSetting('elevenlabs_model_id', v).catch(console.error);
+                    }}
+                  >
+                    <option value="eleven_multilingual_v2">eleven_multilingual_v2</option>
+                    <option value="eleven_turbo_v2">eleven_turbo_v2</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)] mb-1">
+                    Output format
+                  </label>
+                  <select
+                    className="retro-input w-full"
+                    value={elevenOutputFormat}
+                    onChange={(e) => {
+                      const v = e.target.value || 'pcm_24000';
+                      setElevenOutputFormat(v);
+                      api.setSetting('elevenlabs_output_format', v).catch(console.error);
+                    }}
+                  >
+                    <option value="pcm_24000">pcm_24000</option>
+                    <option value="pcm_16000">pcm_16000</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)] mb-1">
+                    Latency optimize
+                  </label>
+                  <select
+                    className="retro-input w-full"
+                    value={elevenLatency}
+                    onChange={(e) => {
+                      const v = e.target.value || '2';
+                      setElevenLatency(v);
+                      api.setSetting('elevenlabs_optimize_streaming_latency', v).catch(console.error);
+                    }}
+                  >
+                    <option value="0">0 (highest quality)</option>
+                    <option value="1">1</option>
+                    <option value="2">2 (balanced)</option>
+                    <option value="3">3</option>
+                    <option value="4">4 (lowest latency)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* LLM Backend */}
         <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
           <h3 className="flex items-center gap-2 font-bold uppercase text-lg">
-            <User className="w-5 h-5" />
-            Default Personality
+            <Brain className="w-5 h-5" />
+            LLM Backend
           </h3>
-          <p className="text-xs text-gray-600">Default character/mode for chat and sessions.</p>
-          <select
-            className="retro-input w-full max-w-md"
-            value={preferences.default_personality_id ?? ''}
-            onChange={(e) => {
-              const v = e.target.value || null;
-              setPreferences((p) => ({ ...p, default_personality_id: v }));
-              savePreferences({ default_personality_id: v });
-            }}
-            disabled={saving}
-          >
-            <option value="">— Use first available —</option>
-            {personalities.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">
-          <h3 className="font-bold uppercase text-lg">Voice behavior</h3>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={preferences.use_default_voice_everywhere}
+          <p className="text-xs text-gray-600">
+            Use a local model (Settings → Models) or ChatGPT via OpenAI API. Changes apply immediately.
+          </p>
+          <div className="space-y-3">
+            <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)]">
+              Backend
+            </label>
+            <select
+              className="retro-input w-full max-w-sm"
+              value={llmBackend}
               onChange={(e) => {
-                const v = e.target.checked;
-                setPreferences((p) => ({ ...p, use_default_voice_everywhere: v }));
-                savePreferences({ use_default_voice_everywhere: v });
+                const next = e.target.value === 'openai' ? 'openai' : 'local';
+                setLlmBackend(next);
+                api.setSetting('llm_backend', next).catch(console.error);
               }}
-              className="retro-input w-4 h-4"
-            />
-            <span className="text-sm">Use default voice everywhere (chat, stories, games)</span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={preferences.allow_experience_voice_override}
-              onChange={(e) => {
-                const v = e.target.checked;
-                setPreferences((p) => ({ ...p, allow_experience_voice_override: v }));
-                savePreferences({ allow_experience_voice_override: v });
-              }}
-              className="retro-input w-4 h-4"
-            />
-            <span className="text-sm">Allow experience voice override (use personality/game/story voice when set)</span>
-          </label>
+            >
+              <option value="local">Local (on-device model)</option>
+              <option value="openai">OpenAI (ChatGPT)</option>
+            </select>
+          </div>
+          {llmBackend === 'openai' && (
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)] mb-1">
+                  OpenAI API Key
+                </label>
+                <input
+                  type="password"
+                  className="retro-input w-full max-w-md"
+                  value={openaiApiKey}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setOpenaiApiKey(v);
+                    api.setSetting('openai_api_key', v || null).catch(console.error);
+                  }}
+                  placeholder="sk-..."
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-mono uppercase tracking-wide text-[var(--color-retro-fg-secondary)] mb-1">
+                  Model
+                </label>
+                <select
+                  className="retro-input w-full max-w-md"
+                  value={openaiModelId}
+                  onChange={(e) => {
+                    const v = e.target.value || 'gpt-4o-mini';
+                    setOpenaiModelId(v);
+                    api.setSetting('openai_model_id', v).catch(console.error);
+                  }}
+                >
+                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  <option value="gpt-4o">gpt-4o</option>
+                  <option value="gpt-4-turbo">gpt-4-turbo</option>
+                  <option value="gpt-4o-nano">gpt-4o-nano</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-4 pt-6 border-t border-[var(--color-retro-border)]">

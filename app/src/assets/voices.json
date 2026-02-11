@@ -4,13 +4,13 @@
     "gender": "female",
     "voice_name": "Ana",
     "voice_description": "A clear and expressive female voice, suitable for various conversational contexts.",
-    "download_url": "https://nevsfqx2plvipel2.public.blob.vercel-storage.com/ana.mp3"
+    "download_url": "https://nevsfqx2plvipel2.public.blob.vercel-storage.com/ana.wav"
   },
   {
     "voice_id": "marko",
     "gender": "male",
     "voice_name": "Marko",
     "voice_description": "A deep and resonant male voice, suitable for authoritative or calm narration.",
-    "download_url": "https://nevsfqx2plvipel2.public.blob.vercel-storage.com/marko.mp3"
+    "download_url": "https://nevsfqx2plvipel2.public.blob.vercel-storage.com/marko.wav"
   }
 ]

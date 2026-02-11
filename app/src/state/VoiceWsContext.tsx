@@ -31,6 +31,9 @@ type Ctx = {
   characterImageSrc: string | null;
   connect: () => void;
   disconnect: () => void;
+  sendText: (text: string) => void;
+  startRecording: () => void;
+  stopRecording: () => void;
   isActive: boolean;
   latestSessionId: string | null;
   isRecording: boolean;
@@ -38,6 +41,7 @@ type Ctx = {
   isSpeaking: boolean;
   micLevel: number;
   transcript: TranscriptEntry[];
+  aiPhase: "idle" | "thinking" | "responding";
 };
 
 const VoiceWsContext = createContext<Ctx | null>(null);
@@ -72,6 +76,7 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
 
   const [latestSessionId, setLatestSessionId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [aiPhase, setAiPhase] = useState<"idle" | "thinking" | "responding">("idle");
 
   const isRecordingRef = useRef(false);
   const isPausedRef = useRef(false);
@@ -379,6 +384,8 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
         try {
           socket.send(JSON.stringify({ type: "audio", data: base64Data }));
           socket.send(JSON.stringify({ type: "end_of_speech" }));
+          // After user finishes speaking, AI is now thinking
+          setAiPhase("thinking");
         } catch {
           // ignore
         }
@@ -411,7 +418,30 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
     awaitingResumeRef.current = false;
     autoStartedMicRef.current = false;
     resumeMic();
+    setAiPhase("idle");
     setTranscript([]);
+  };
+
+  const sendText = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setError("Voice WebSocket is not connected");
+      return;
+    }
+    // Mark AI as thinking until we receive a response
+    setAiPhase("thinking");
+    try {
+      ws.send(
+        JSON.stringify({
+          type: "transcription",
+          text: trimmed,
+        })
+      );
+    } catch (e: any) {
+      setError(e?.message || "Failed to send text message");
+    }
   };
 
   const connect = () => {
@@ -507,6 +537,8 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
             enqueueTtsChunk(msg.data);
           }
         } else if (msg.type === "audio_end") {
+          // Finished speaking out the response
+          setAiPhase("idle");
           awaitingResumeRef.current = true;
           if (!ttsPlaybackActiveRef.current && ttsPcmQueueRef.current.length === 0) {
             awaitingResumeRef.current = false;
@@ -547,6 +579,8 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
           }
         } else if (msg.type === "response") {
           if (msg.text) {
+            // We are now in the responding phase (text + audio)
+            setAiPhase("responding");
             const entry: TranscriptEntry = {
               id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
               role: "ai",
@@ -641,6 +675,11 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
       characterImageSrc,
       connect,
       disconnect,
+      sendText,
+      startRecording: () => {
+        void startRecording();
+      },
+      stopRecording,
       isActive: status === "connected" || status === "connecting",
       latestSessionId,
       isRecording,
@@ -648,6 +687,7 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
       isSpeaking,
       micLevel,
       transcript,
+      aiPhase,
     }),
     [
       status,
@@ -661,6 +701,7 @@ export const VoiceWsProvider = ({ children }: { children: React.ReactNode }) => 
       isSpeaking,
       micLevel,
       transcript,
+      aiPhase,
     ]
   );
 

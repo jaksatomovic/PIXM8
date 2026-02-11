@@ -1,65 +1,77 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useActiveUser } from '../state/ActiveUserContext';
-import { Bot, Plus } from 'lucide-react';
-import { Modal } from '../components/Modal';
+import { Bot, Package, Star } from 'lucide-react';
+import { convertFileSrc } from '@tauri-apps/api/core';
+
+type Personality = {
+  id: string;
+  name: string;
+  short_description?: string;
+  voice_id?: string;
+  type?: string;
+  img_src?: string | null;
+  is_global?: boolean;
+  created_at?: number | string | null;
+};
 
 type ActiveSession = {
-  session_id: string | null;
   active_personality_id: string | null;
   default_personality_id: string | null;
   active_personality_name: string | null;
   default_personality_name: string | null;
-  profiles?: Array<{ id: string; name: string; voice_id: string; personality_id: string }>;
-  default_profile_id?: string | null;
 };
 
-type Personality = { id: string; name: string; short_description?: string };
+const GLOBAL_IMAGE_BASE_URL = 'https://pub-a64cd21521e44c81a85db631f1cdaacc.r2.dev';
 
 export const ProfilesPage = () => {
-  const navigate = useNavigate();
-  const { activeUserId, refreshUsers } = useActiveUser();
-  const [profiles, setProfiles] = useState<Array<{ id: string; name: string; voice_id: string; personality_id: string }>>([]);
-  const [voices, setVoices] = useState<Array<{ voice_id: string; voice_name: string }>>([]);
+  const { activeUserId, activeUser, refreshUsers } = useActiveUser();
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
-  const [preferences, setPreferences] = useState<{ default_profile_id?: string | null }>({ default_profile_id: null });
+  const [preferences, setPreferences] = useState<{ default_personality_id: string | null }>({ default_personality_id: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [newProfileName, setNewProfileName] = useState('');
-  const [newProfileVoiceId, setNewProfileVoiceId] = useState('');
-  const [newProfilePersonalityId, setNewProfilePersonalityId] = useState('');
-  const [createSaving, setCreateSaving] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState('');
+  const [brokenImgById, setBrokenImgById] = useState<Record<string, boolean>>({});
+
+  const imgSrcFor = (p: Personality) => {
+    const src = typeof p?.img_src === 'string' ? p.img_src.trim() : '';
+    if (src) {
+      if (/^https?:\/\//i.test(src)) return src;
+      return convertFileSrc(src);
+    }
+    if (p?.is_global) {
+      const id = p?.id != null ? String(p.id) : '';
+      if (!id) return null;
+      return `${GLOBAL_IMAGE_BASE_URL}/${encodeURIComponent(id)}.png`;
+    }
+    return null;
+  };
+
+  const toTimestamp = (v: unknown) => {
+    if (v == null) return 0;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+    if (typeof v === 'string') {
+      const asNum = Number(v);
+      if (Number.isFinite(asNum)) return asNum;
+      const ms = Date.parse(v);
+      if (Number.isFinite(ms)) return Math.floor(ms / 1000);
+    }
+    return 0;
+  };
 
   const loadActiveSession = async () => {
     try {
       const data = await api.getActiveSession();
       setActiveSession({
-        session_id: data?.session_id ?? null,
         active_personality_id: data?.active_personality_id ?? null,
         default_personality_id: data?.default_personality_id ?? null,
         active_personality_name: data?.active_personality_name ?? null,
         default_personality_name: data?.default_personality_name ?? null,
-        profiles: data?.profiles ?? [],
-        default_profile_id: data?.default_profile_id ?? null,
       });
-      if (Array.isArray(data?.profiles)) setProfiles(data.profiles);
     } catch {
       setActiveSession(null);
-    }
-  };
-
-  const loadProfiles = async () => {
-    try {
-      const res = await api.getProfiles();
-      const list = (res as any)?.profiles ?? [];
-      setProfiles(Array.isArray(list) ? list : []);
-    } catch {
-      setProfiles([]);
     }
   };
 
@@ -68,40 +80,27 @@ export const ProfilesPage = () => {
     const load = async () => {
       try {
         setError(null);
-        const [voicesRes, prefs, active, exps, downloadedRes] = await Promise.all([
-          api.getVoices().catch(() => []),
-          api.getPreferences().catch(() => ({ default_profile_id: null })),
+        const [exps, prefs, active] = await Promise.all([
+          api.getExperiences(false, 'personality'),
+          api.getPreferences().catch(() => ({ default_personality_id: null })),
           api.getActiveSession().catch(() => null),
-          api.getExperiences(false, 'personality').catch(() => []),
-          api.listDownloadedVoices().catch(() => []),
         ]);
         if (!cancelled) {
-          const downloaded = new Set(Array.isArray(downloadedRes) ? downloadedRes : []);
-          setDownloadedVoiceIds(downloaded);
-          const voiceList = Array.isArray(voicesRes) ? voicesRes : [];
-          // Only allow downloaded voices when creating characters, so chat always has a usable voice.
-          setVoices(voiceList.filter((v: any) => downloaded.has(String(v.voice_id))));
-          setPreferences({ default_profile_id: (prefs as any)?.default_profile_id ?? null });
           setPersonalities(Array.isArray(exps) ? exps : []);
+          setPreferences({ default_personality_id: (prefs as { default_personality_id?: string | null })?.default_personality_id ?? null });
           if (active) {
             setActiveSession({
-              session_id: active?.session_id ?? null,
               active_personality_id: active?.active_personality_id ?? null,
               default_personality_id: active?.default_personality_id ?? null,
               active_personality_name: active?.active_personality_name ?? null,
               default_personality_name: active?.default_personality_name ?? null,
-              profiles: active?.profiles ?? [],
-              default_profile_id: active?.default_profile_id ?? null,
             });
-            if (Array.isArray(active?.profiles)) setProfiles(active.profiles);
           } else {
             setActiveSession(null);
           }
-          const profRes = await api.getProfiles().catch(() => ({ profiles: [] }));
-          if (!cancelled && Array.isArray((profRes as any)?.profiles)) setProfiles((profRes as any).profiles);
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Failed to load characters');
+      } catch (e: unknown) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load characters');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -110,64 +109,54 @@ export const ProfilesPage = () => {
     return () => { cancelled = true; };
   }, []);
 
-  const setDefaultProfile = async (profileId: string) => {
+  const setAsDefault = async (e: React.MouseEvent, personalityId: string) => {
+    e.stopPropagation();
     try {
-      await api.setPreferences({ default_profile_id: profileId });
-      setPreferences((p) => ({ ...p, default_profile_id: profileId }));
+      await api.setPreferences({ default_personality_id: personalityId });
+      setPreferences((p) => ({ ...p, default_personality_id: personalityId }));
       await loadActiveSession();
-    } catch (e: any) {
-      console.error('Set default profile failed', e);
+    } catch (err) {
+      console.error('Set default failed', err);
     }
   };
 
-  const useProfileForSession = async (profileId: string) => {
-    if (!activeUserId) {
-      setError('Select a member first in Members.');
-      return;
-    }
+  const activateCharacter = async (personalityId: string) => {
+    if (!activeUserId) return;
     try {
       setError(null);
-      await api.setActiveSessionProfile(profileId);
+      await api.setActiveSessionPersonality(personalityId);
       await Promise.all([loadActiveSession(), refreshUsers()]);
-      try {
-        await api.setAppMode('chat');
-      } catch {
-        // non-blocking
-      }
-      navigate('/chat');
-    } catch (e: any) {
-      setError(e?.message || 'Failed to set profile');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to set character');
     }
   };
 
-  const createProfile = async () => {
-    if (!newProfileName.trim() || !newProfileVoiceId || !newProfilePersonalityId) return;
-    setCreateError(null);
-    setCreateSaving(true);
-    try {
-      await api.createProfile({
-        name: newProfileName.trim(),
-        voice_id: newProfileVoiceId,
-        personality_id: newProfilePersonalityId,
-      });
-      setNewProfileName('');
-      setNewProfileVoiceId('');
-      setNewProfilePersonalityId('');
-      setCreateModalOpen(false);
-      await loadProfiles();
-      await loadActiveSession();
-    } catch (e: any) {
-      console.error('Create character failed', e);
-      const msg = e?.message || 'Failed to create character.';
-      setCreateError(
-        e?.status === 404
-          ? 'Profiles API not found. Restart the app (close and run again) so the backend uses the latest code.'
-          : msg
-      );
-    } finally {
-      setCreateSaving(false);
-    }
-  };
+  const filtered = useMemo(() => {
+    if (!filter.trim()) return personalities;
+    const q = filter.trim().toLowerCase();
+    return personalities.filter(
+      (p) =>
+        p.name?.toLowerCase().includes(q) ||
+        (p.short_description ?? '').toLowerCase().includes(q)
+    );
+  }, [personalities, filter]);
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const aG = Boolean(a?.is_global);
+      const bG = Boolean(b?.is_global);
+      if (aG !== bG) return aG ? 1 : -1;
+      const aT = toTimestamp(a?.created_at);
+      const bT = toTimestamp(b?.created_at);
+      if (aT !== bT) return bT - aT;
+      return 0;
+    });
+    return arr;
+  }, [filtered]);
+
+  const activeId = activeSession?.active_personality_id ?? activeUser?.current_personality_id ?? null;
+  const defaultId = activeSession?.default_personality_id ?? preferences.default_personality_id ?? null;
 
   if (loading) {
     return (
@@ -190,83 +179,18 @@ export const ProfilesPage = () => {
           <Bot className="w-7 h-7" />
           Characters
         </h1>
-        <button
-          type="button"
-          className="retro-btn retro-btn-outline flex items-center gap-2"
-          onClick={() => {
-            setCreateModalOpen(true);
-            setNewProfileName('');
-            setNewProfileVoiceId('');
-            setNewProfilePersonalityId('');
-            setCreateError(null);
-          }}
-        >
-          <Plus size={16} />
-          Create character
-        </button>
+        <Link to="/packs" className="retro-btn retro-btn-outline flex items-center gap-2">
+          <Package size={16} />
+          Get more characters
+        </Link>
       </div>
-
-      <Modal
-        open={createModalOpen}
-        icon={<Bot size={24} />}
-        title="Create character"
-        onClose={() => setCreateModalOpen(false)}
-        panelClassName="w-full max-w-lg"
-      >
-        <p className="text-sm text-gray-600 mb-4">
-          Save a voice + personality pair for the robot (e.g. Friendly Anna, Bossy Robot). Set one as default for device or use for this session.
-        </p>
-        <div className="flex flex-col gap-4">
-          <input
-            type="text"
-            placeholder="Character name"
-            value={newProfileName}
-            onChange={(e) => setNewProfileName(e.target.value)}
-            className="retro-input w-full"
-          />
-          <select
-            className="retro-input w-full"
-            value={newProfileVoiceId}
-            onChange={(e) => setNewProfileVoiceId(e.target.value)}
-          >
-            <option value="">— Voice (downloaded) —</option>
-            {voices.map((v) => (
-              <option key={v.voice_id} value={v.voice_id}>{v.voice_name}</option>
-            ))}
-          </select>
-          <select
-            className="retro-input w-full"
-            value={newProfilePersonalityId}
-            onChange={(e) => setNewProfilePersonalityId(e.target.value)}
-          >
-            <option value="">— Personality —</option>
-            {personalities.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          {createError && (
-            <div className="p-3 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm flex items-start justify-between gap-2">
-              <span>{createError}</span>
-              <button type="button" className="shrink-0 text-red-600 dark:text-red-400 hover:underline" onClick={() => setCreateError(null)} aria-label="Dismiss">×</button>
-            </div>
-          )}
-          <button
-            type="button"
-            className="retro-btn flex items-center gap-2"
-            onClick={createProfile}
-            disabled={createSaving || !newProfileName.trim() || !newProfileVoiceId || !newProfilePersonalityId}
-          >
-            <Plus size={16} /> Create
-          </button>
-        </div>
-      </Modal>
 
       {!activeUserId && (
         <div
           className="retro-card font-mono text-sm mb-4"
           style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}
         >
-          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then use &quot;Use for this session&quot; to start chatting with a character.
+          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then click a character to use it.
         </div>
       )}
 
@@ -274,54 +198,88 @@ export const ProfilesPage = () => {
         <div className="retro-card font-mono text-sm text-red-600">{error}</div>
       )}
 
-      <p className="text-sm text-gray-600">
-        Saved voice + personality pairs for the robot. Use for this session or set as default for device. Create a new character with the button above.
-      </p>
-
-      {downloadedVoiceIds.size === 0 && (
-        <div
-          className="retro-card font-mono text-sm mb-4"
-          style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}
-        >
-          Download at least one voice on the <Link to="/voices" className="underline font-bold">Voices</Link> page before creating a character.
+      {/* {activeId && activeSession?.active_personality_name && (
+        <div className="retro-card font-mono text-sm flex flex-wrap gap-4">
+          <span><strong>Active:</strong> {activeSession.active_personality_name}</span>
+          {defaultId && activeSession?.default_personality_name && (
+            <span><strong>Default:</strong> {activeSession.default_personality_name}</span>
+          )}
         </div>
-      )}
+      )} */}
 
-      {profiles.length === 0 ? (
-        <div className="retro-card font-mono text-sm py-6 text-center text-[var(--color-retro-fg-secondary)]">
-          No characters yet. Click Create character above to add one.
+      <input
+        type="text"
+        placeholder="Search characters…"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        className="retro-input w-full max-w-md"
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {sorted.map((p) => {
+          const isActive = activeId === p.id;
+          const isDefault = defaultId === p.id;
+          return (
+            <div
+              key={p.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => activeUserId && activateCharacter(p.id)}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && activeUserId) {
+                  e.preventDefault();
+                  activateCharacter(p.id);
+                }
+              }}
+              className={`retro-card relative flex flex-col text-left cursor-pointer transition-shadow h-[300px] ${
+                isActive ? 'retro-selected ring-2 ring-[var(--color-retro-accent)]' : 'retro-not-selected'
+              }`}
+              style={{ padding: 0 }}
+            >
+              <button
+                type="button"
+                onClick={(e) => setAsDefault(e, p.id)}
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-amber-500 transition-colors"
+                title={isDefault ? 'Default character' : 'Set as default'}
+                aria-label={isDefault ? 'Default' : 'Set as default'}
+              >
+                <Star
+                  size={18}
+                  className={isDefault ? 'fill-amber-500 text-amber-500' : ''}
+                />
+              </button>
+              <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 dark:bg-orange-950/20 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)] shrink-0">
+                {imgSrcFor(p) && !brokenImgById[p.id] ? (
+                  <img
+                    src={imgSrcFor(p) || ''}
+                    alt=""
+                    className="h-auto w-auto max-h-full max-w-full object-contain"
+                    onError={() => setBrokenImgById((prev) => ({ ...prev, [p.id]: true }))}
+                  />
+                ) : (
+                  <Bot size={48} className="text-gray-400" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1 flex flex-col p-4 pr-12 overflow-hidden">
+                <h3 className="text-lg font-black leading-tight retro-clamp-2">{p.name}</h3>
+                <p className="text-gray-600 text-xs font-medium mt-2 retro-clamp-2 flex-1 min-h-0">
+                  {p.short_description || '—'}
+                </p>
+                {isActive && (
+                  <span className="mt-2 text-xs font-bold text-green-600 dark:text-green-400 shrink-0">
+                    Active
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {sorted.length === 0 && (
+        <div className="retro-card font-mono text-sm py-8 text-center text-[var(--color-retro-fg-secondary)]">
+          {filter.trim() ? 'No characters match your search.' : 'No characters installed. Get more from Packs.'}
         </div>
-      ) : (
-        <ul className="space-y-2">
-          {profiles.map((pr) => {
-            const voiceName = voices.find((v) => v.voice_id === pr.voice_id)?.voice_name ?? pr.voice_id;
-            const personalityName = personalities.find((p) => p.id === pr.personality_id)?.name ?? pr.personality_id;
-            const isDefault = (activeSession?.default_profile_id ?? preferences.default_profile_id) === pr.id;
-            return (
-              <li key={pr.id} className="retro-card flex items-center justify-between gap-2 py-2 px-4">
-                <span className="font-medium truncate">{pr.name}</span>
-                <span className="text-xs text-gray-600 truncate">{voiceName} + {personalityName}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    className={`retro-btn retro-btn-outline text-sm ${isDefault ? 'opacity-100 font-bold' : ''}`}
-                    onClick={() => setDefaultProfile(pr.id)}
-                  >
-                    {isDefault ? 'Default' : 'Set as Default'}
-                  </button>
-                  <button
-                    type="button"
-                    className="retro-btn text-sm"
-                    onClick={() => useProfileForSession(pr.id)}
-                    title="Use for this session"
-                  >
-                    Use for session
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
       )}
     </div>
   );

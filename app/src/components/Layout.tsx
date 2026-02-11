@@ -4,7 +4,7 @@ import { useActiveUser } from '../state/ActiveUserContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useEffect, useState } from 'react';
-import { Bot, X, RefreshCw, Plus, Paperclip } from 'lucide-react';
+import { Bot, X, RefreshCw } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { VoiceWsProvider, useVoiceWs } from '../state/VoiceWsContext';
 import { useDocsContextOptional } from '../state/DocsContext';
@@ -37,8 +37,6 @@ const LayoutInner = () => {
   // Network monitoring
   const [initialIp, setInitialIp] = useState<string | null>(null);
   const [showNetworkBanner, setShowNetworkBanner] = useState(false);
-  const [showAttachDropdown, setShowAttachDropdown] = useState(false);
-  const [uploadingFile, setUploadingFile] = useState(false);
   const [showCharacterSetupWizard, setShowCharacterSetupWizard] = useState(false);
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string; voice_id: string; personality_id: string }>>([]);
   const [voices, setVoices] = useState<Array<{ voice_id: string; voice_name: string }>>([]);
@@ -245,10 +243,11 @@ const LayoutInner = () => {
     const checkCharacterSetup = async () => {
       if (!activeUser?.id) return;
       try {
-        const [profilesRes, voicesRes, downloadedRes] = await Promise.all([
+        const [profilesRes, voicesRes, downloadedRes, activeSessionRes] = await Promise.all([
           api.getProfiles().catch(() => ({ profiles: [] })),
           api.getVoices().catch(() => []),
           api.listDownloadedVoices().catch(() => []),
+          api.getActiveSession().catch(() => null),
         ]);
         if (cancelled) return;
         const profilesList = Array.isArray((profilesRes as any)?.profiles) ? (profilesRes as any).profiles : [];
@@ -257,8 +256,13 @@ const LayoutInner = () => {
         setProfiles(profilesList);
         setVoices(voicesList);
         setDownloadedVoiceIds(downloaded);
-        // Show wizard if no characters exist and user is on home/chat page
-        if (profilesList.length === 0 && (location.pathname === '/' || location.pathname === '/playground')) {
+        const hasActiveCharacter = !!(activeUser?.current_personality_id ?? (activeSessionRes as any)?.active_personality_id);
+        // Show wizard only if no profiles AND no active character, and user is on home/playground
+        if (
+          profilesList.length === 0 &&
+          !hasActiveCharacter &&
+          (location.pathname === '/' || location.pathname === '/playground')
+        ) {
           setShowCharacterSetupWizard(true);
         }
       } catch {
@@ -269,10 +273,9 @@ const LayoutInner = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeUser?.id, location.pathname]);
+  }, [activeUser?.id, activeUser?.current_personality_id, location.pathname]);
 
-  const canStartChat =
-    sessionActive || !activeVoiceId || downloadedVoiceIds.has(String(activeVoiceId));
+  const canStartChat = sessionActive || !!activeVoiceId;
 
   useEffect(() => {
     const onDeleted = () => {
@@ -319,7 +322,7 @@ const LayoutInner = () => {
             <Outlet />
           </div>
 
-        {(activeSession?.active_personality_id ?? activeUser?.current_personality_id) && (
+        {(location.pathname !== '/' && (activeSession?.active_personality_id ?? activeUser?.current_personality_id)) && (
           <div className="fixed bottom-0 z-20 left-[17rem] right-0 pointer-events-none">
             <div className="max-w-4xl mx-auto px-8 pb-6 pointer-events-auto">
               <div className="retro-card rounded-full px-5 py-5 flex flex-col relative">
@@ -349,65 +352,9 @@ const LayoutInner = () => {
                   </div>
                 )}
 
-                {/* Bottom row: Plus button, Status and personality info */}
+                {/* Bottom row: Status and personality info */}
                 <div className="min-w-0 flex items-center justify-between flex-1">
                   <div className="min-w-0 flex items-center gap-4 flex-1">
-                    {/* Attach button - far left, icon only */}
-                    <div className="relative shrink-0">
-                      <button
-                        type="button"
-                        className="retro-icon-btn p-2 rounded-full w-9 h-9 flex items-center justify-center mr-2"
-                        onClick={() => setShowAttachDropdown(!showAttachDropdown)}
-                        title="Add photos & files"
-                        aria-label="Add photos & files"
-                      >
-                        <Plus size={20} />
-                      </button>
-                      {showAttachDropdown && (
-                        <div className="absolute bottom-full left-0 mb-2 z-30 w-[240px] retro-card py-1.5 shadow-lg">
-                          <button
-                            type="button"
-                            className="w-full flex items-center gap-2 px-4 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 whitespace-nowrap"
-                            disabled={uploadingFile}
-                            onClick={() => {
-                              const input = document.createElement('input');
-                              input.type = 'file';
-                              input.multiple = true;
-                              input.accept = '.pdf,.txt,.md,.json,.csv,image/*,.doc,.docx,application/pdf,text/*';
-                              input.onchange = async (e) => {
-                                const files = (e.target as HTMLInputElement).files;
-                                if (!files || files.length === 0) return;
-                                setUploadingFile(true);
-                                try {
-                                  for (const file of Array.from(files)) {
-                                    const created = await api.uploadDoc(file);
-                                    if (created?.id && docsContext?.addDoc) {
-                                      docsContext.addDoc(created.id, {
-                                        id: created.id,
-                                        filename: created.filename ?? file.name,
-                                        title: created.title ?? null,
-                                        doc_type: created.doc_type ?? 'other',
-                                        size_bytes: created.size_bytes ?? 0,
-                                        created_at: created.created_at ?? 0,
-                                      });
-                                    }
-                                  }
-                                } catch (err: any) {
-                                  console.error('Upload failed', err);
-                                } finally {
-                                  setUploadingFile(false);
-                                  setShowAttachDropdown(false);
-                                }
-                              };
-                              input.click();
-                            }}
-                          >
-                            <Paperclip size={16} />
-                            <span className="truncate">{uploadingFile ? 'Uploading…' : 'Add photos & files'}</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
                     {(activePersonalityImageSrc || activePersonalityImageFallback) && (
                       <div className="w-12 h-12 rounded-full overflow-hidden retro-card border border-[var(--color-retro-border)] shrink-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                         {!activePersonalityImageError ? (
@@ -497,39 +444,42 @@ const LayoutInner = () => {
                       </button>
                     )}
                     {localActive && (
-                      <button
-                        type="button"
-                        className="retro-btn retro-btn-outline no-lift px-4 py-2 text-sm flex items-center gap-2"
-                        onClick={() => {
-                          voiceWs.disconnect();
-                          const sid = voiceWs.latestSessionId;
-                          if (sid) {
-                            navigate(`/conversations?session=${encodeURIComponent(sid)}`);
-                          } else {
-                            navigate('/conversations');
-                          }
-                        }}
-                      >
-                        <X size={18} className="shrink-0" /> End
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="retro-btn retro-btn-purple no-lift px-4 py-2 text-sm flex items-center gap-2"
+                          onClick={() => {
+                            navigate('/');
+                          }}
+                        >
+                          <Bot size={18} className="shrink-0" /> View
+                        </button>
+                        <button
+                          type="button"
+                          className="retro-btn retro-btn-outline no-lift px-4 py-2 text-sm flex items-center gap-2"
+                          onClick={() => {
+                            voiceWs.disconnect();
+                            const sid = voiceWs.latestSessionId;
+                            if (sid) {
+                              navigate(`/conversations?session=${encodeURIComponent(sid)}`);
+                            } else {
+                              navigate('/conversations');
+                            }
+                          }}
+                        >
+                          <X size={18} className="shrink-0" /> End
+                        </button>
+                      </div>
                     )}
                     {!canStartChat && !sessionActive && !deviceConnected && (
                       <div className="mt-1 font-mono text-xs text-gray-500">
-                        Download voice to start chat
+                        Select a character (with voice) to start chat
                       </div>
                     )}
                   </div>
                   </div>
                 </div>
               </div>
-              
-              {/* Click outside to close dropdown */}
-              {showAttachDropdown && (
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowAttachDropdown(false)}
-                />
-              )}
             </div>
           </div>
         )}

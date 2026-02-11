@@ -96,9 +96,12 @@ pub(crate) fn get_venv_python(app: &AppHandle) -> PathBuf {
         venv.join("Scripts").join("python.exe")
     } else {
         let bin = venv.join("bin");
-        let python = bin.join("python");
-        if python.exists() {
-            return python;
+        let candidates = ["python", "python3", "python3.12", "python3.11"];
+        for name in candidates {
+            let p = bin.join(name);
+            if p.exists() {
+                return p;
+            }
         }
         bin.join("python3")
     }

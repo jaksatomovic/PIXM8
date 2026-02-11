@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, User, LockKeyhole, Settings, History, Plus, Home, Dot, Package, AudioWaveform, Bot } from 'lucide-react';
+import { Users, LockKeyhole, Settings, History, Plus, Dot, Package, AudioWaveform, Bot, FileText, MessageCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { useState } from 'react';
 import { Logo } from './Logo';
@@ -78,13 +78,12 @@ export const Sidebar = () => {
             </div>
             <NavItem
               to="/"
-              icon={Home}
-              label="Home"
+              icon={MessageCircle}
+              label="Chat"
               matchPath="/"
             />
             <NavItem to="/voices" icon={AudioWaveform} label="Voices" />
             <NavItem to="/profiles" icon={Bot} label="Characters" />
-            <NavItem to="/personalities" icon={User} label="Personalities" />
             <NavItem to="/packs" icon={Package} label="Packs" />
             <div className="grid grid-cols-3 gap-2 px-3 pb-3 w-full mt-3">
               <NavItem
@@ -137,19 +136,19 @@ export const Sidebar = () => {
         onClose={() => setCreateMenuOpen(false)}
         panelClassName="w-full max-w-3xl"
       >
-        <CreateTiles
-          iconSize={ICON_SIZE}
-          onSelect={(kind) => {
-            if (kind === "voice") {
-              setCreateMenuOpen(false);
-              navigate("/voices?create=voice");
-              return;
-            }
-            const tab = kind === "character" ? "personality" : kind;
-            setCreateMenuOpen(false);
-            navigate(`/?tab=${tab}&create=1`);
-          }}
-        />
+            <CreateTiles
+              iconSize={ICON_SIZE}
+              onSelect={(kind) => {
+                if (kind === "voice") {
+                  setCreateMenuOpen(false);
+                  navigate("/voices?create=voice");
+                  return;
+                }
+                setCreateMenuOpen(false);
+                // For now, all non-voice creations start from the Chat page
+                navigate("/?create=1");
+              }}
+            />
       </Modal>
     </div>
   );

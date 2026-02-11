@@ -49,7 +49,7 @@ function formatDate(ts: number): string {
   return d.toLocaleDateString(undefined, { dateStyle: "short" });
 }
 
-export const DocsTab = () => {
+export const DocsTab = ({ compact = false }: { compact?: boolean } = {}) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -330,19 +330,21 @@ export const DocsTab = () => {
           Loading…
         </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className={`grid gap-3 ${compact ? "grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
           {/* Card: Add new document - Always visible */}
-          <li
-            role="button"
-            tabIndex={0}
-            onClick={handleAddDocClick}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") handleAddDocClick();
-            }}
-            className={`retro-card retro-not-selected flex flex-col cursor-pointer transition-shadow hover:shadow-[var(--shadow-retro-hover)] text-left list-none ${uploading ? "opacity-60 pointer-events-none" : ""}`}
-            style={{ padding: 0 }}
+            <li
+              role="button"
+              tabIndex={0}
+              onClick={handleAddDocClick}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") handleAddDocClick();
+              }}
+              className={`retro-card retro-not-selected flex flex-col cursor-pointer transition-shadow hover:shadow-[var(--shadow-retro-hover)] text-left list-none ${
+                uploading ? "opacity-60 pointer-events-none" : ""
+              } ${compact ? "min-h-[150px]" : "min-h-[175px]"}`}
+              style={{ padding: 0 }}
           >
-            <div className="w-full h-[140px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]">
+            <div className={`w-full ${compact ? "h-[110px]" : "h-[140px]"} rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden border-b border-[var(--color-retro-border)]`}>
               <FilePlus size={32} className="text-gray-500" />
             </div>
             <div className="min-w-0 flex-1 p-4">
@@ -361,7 +363,9 @@ export const DocsTab = () => {
           {sortedDocs.map((d) => (
             <li
               key={d.id}
-              className="retro-card flex flex-col gap-3 p-4 relative min-h-[175px]"
+              className={`retro-card flex flex-col gap-3 p-4 relative ${
+                compact ? "min-h-[150px]" : "min-h-[175px]"
+              }`}
             >
               <div className="flex items-start gap-2">
                 <button

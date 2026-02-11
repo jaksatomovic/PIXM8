@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { Image as ImageIcon, Pencil, Trash2, MessageCircle, Maximize2, FileText, Bot } from 'lucide-react';
+import { MessageCircle, FileText, Bot } from 'lucide-react';
 import { useActiveUser } from '../state/ActiveUserContext';
 import { ExperienceModal, ExperienceForModal } from '../components/ExperienceModal';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { convertFileSrc } from '@tauri-apps/api/core';
-import { VoiceActionButtons } from '../components/VoiceActionButtons';
-import { useVoicePlayback } from '../hooks/useVoicePlayback';
-import { Modal } from '../components/Modal';
+import { Link, useSearchParams } from 'react-router-dom';
 import { DocsTab } from './DocsTab';
+import { Conversations } from './Conversations';
 
 type ExperienceType = 'personality' | 'docs';
 
@@ -21,99 +18,24 @@ const VALID_TABS: ExperienceType[] = ['personality', 'docs'];
 
 export const Playground = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const tabParam = (searchParams.get('tab') as ExperienceType) || 'personality';
   const initialTab = VALID_TABS.includes(tabParam) ? tabParam : 'personality';
   const [activeTab, setActiveTab] = useState<ExperienceType>(initialTab);
   
-  const [experiences, setExperiences] = useState<any[]>([]);
-  const [voices, setVoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [brokenImgById, setBrokenImgById] = useState<Record<string, boolean>>({});
-  const [downloadedVoiceIds, setDownloadedVoiceIds] = useState<Set<string>>(new Set());
-  const [downloadingVoiceId, setDownloadingVoiceId] = useState<string | null>(null);
-  const [audioSrcByVoiceId, setAudioSrcByVoiceId] = useState<Record<string, string>>({});
-  const [profiles, setProfiles] = useState<Array<{ id: string; name: string; voice_id: string; personality_id: string }>>([]);
+  const [activeSession, setActiveSession] = useState<{ active_personality_id: string | null; active_personality_name: string | null } | null>(null);
 
-  const { playingVoiceId, isPaused, toggle: toggleVoice } = useVoicePlayback(async (voiceId) => {
-    let src = audioSrcByVoiceId[voiceId];
-    if (!src) {
-      const b64 = await api.readVoiceBase64(voiceId);
-      if (!b64) return null;
-      src = `data:audio/wav;base64,${b64}`;
-      setAudioSrcByVoiceId((prev) => ({ ...prev, [voiceId]: src! }));
-    }
-    return src;
-  });
-  
-  // Modal state
+  // Modal state (create experience from URL ?create=...)
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedExperience, setSelectedExperience] = useState<ExperienceForModal | null>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
-  const [infoExperience, setInfoExperience] = useState<any | null>(null);
 
-  const { activeUserId } = useActiveUser();
-
-  const GLOBAL_IMAGE_BASE_URL = 'https://pub-a64cd21521e44c81a85db631f1cdaacc.r2.dev';
-
-  const imgSrcFor = (p: any) => {
-    const src = typeof p?.img_src === 'string' ? p.img_src.trim() : '';
-    if (src) {
-      if (/^https?:\/\//i.test(src)) return src;
-      return convertFileSrc(src);
-    }
-    if (p?.is_global) {
-      const id = p?.id != null ? String(p.id) : '';
-      if (!id) return null;
-      return `${GLOBAL_IMAGE_BASE_URL}/${encodeURIComponent(id)}.png`;
-    }
-    return null;
-  };
-
-  const toTimestamp = (v: any) => {
-    if (v == null) return 0;
-    if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-    if (typeof v === 'string') {
-      const asNum = Number(v);
-      if (Number.isFinite(asNum)) return asNum;
-      const ms = Date.parse(v);
-      if (Number.isFinite(ms)) return Math.floor(ms / 1000);
-    }
-    return 0;
-  };
+  const { activeUserId, activeUser } = useActiveUser();
 
   const load = async () => {
-    if (activeTab === 'docs') {
-      setLoading(false);
-      return;
-    }
-    try {
-      setError(null);
-      const data = await api.getExperiences(false, activeTab as 'personality' | 'game' | 'story');
-      setExperiences(data);
-      setBrokenImgById({});
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load experiences');
-    } finally {
-      setLoading(false);
-    }
+    setLoading(false);
   };
-
-  const sortedExperiences = useMemo(() => {
-    const arr = Array.isArray(experiences) ? experiences.slice() : [];
-    arr.sort((a, b) => {
-      const aG = Boolean(a?.is_global);
-      const bG = Boolean(b?.is_global);
-      if (aG !== bG) return aG ? 1 : -1;
-      const aT = toTimestamp(a?.created_at);
-      const bT = toTimestamp(b?.created_at);
-      if (aT !== bT) return bT - aT;
-      return 0;
-    });
-    return arr;
-  }, [experiences]);
 
   useEffect(() => {
     setLoading(true);
@@ -124,15 +46,6 @@ export const Playground = () => {
     const tab = (searchParams.get('tab') as ExperienceType) || 'personality';
     if (tab !== activeTab) setActiveTab(tab);
   }, [searchParams, activeTab]);
-
-  useEffect(() => {
-    const focusId = searchParams.get('focus');
-    if (!focusId || loading) return;
-    const el = document.getElementById(`experience-${focusId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, [searchParams, experiences, loading]);
 
   useEffect(() => {
     const create = searchParams.get('create');
@@ -147,118 +60,24 @@ export const Playground = () => {
 
   useEffect(() => {
     let cancelled = false;
-    const loadDownloaded = async () => {
+    const loadActive = async () => {
       try {
-        const ids = await api.listDownloadedVoices();
-        if (!cancelled) setDownloadedVoiceIds(new Set(Array.isArray(ids) ? ids : []));
-      } catch {
-        if (!cancelled) setDownloadedVoiceIds(new Set());
-      }
-    };
-    loadDownloaded();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadVoices = async () => {
-      try {
-        const data = await api.getVoices();
-        if (!cancelled) setVoices(Array.isArray(data) ? data : []);
-      } catch {
-        if (!cancelled) setVoices([]);
-      }
-    };
-    loadVoices();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadProfiles = async () => {
-      try {
-        const res = await api.getProfiles().catch(() => ({ profiles: [] }));
-        if (!cancelled) {
-          const list = (res as any)?.profiles ?? [];
-          setProfiles(Array.isArray(list) ? list : []);
+        const data = await api.getActiveSession().catch(() => null);
+        if (!cancelled && data) {
+          setActiveSession({
+            active_personality_id: data?.active_personality_id ?? null,
+            active_personality_name: data?.active_personality_name ?? null,
+          });
+        } else if (!cancelled) {
+          setActiveSession(null);
         }
       } catch {
-        if (!cancelled) setProfiles([]);
+        if (!cancelled) setActiveSession(null);
       }
     };
-    loadProfiles();
-    return () => {
-      cancelled = true;
-    };
+    loadActive();
+    return () => { cancelled = true; };
   }, []);
-
-  const voiceById = useMemo(() => {
-    const m = new Map<string, any>();
-    for (const v of voices) {
-      if (v?.voice_id) m.set(String(v.voice_id), v);
-    }
-    return m;
-  }, [voices]);
-
-  const downloadVoice = async (voiceId: string) => {
-    setDownloadingVoiceId(voiceId);
-    try {
-      await api.downloadVoice(voiceId);
-      setDownloadedVoiceIds((prev) => {
-        const next = new Set(prev);
-        next.add(voiceId);
-        return next;
-      });
-      try {
-        window.dispatchEvent(new CustomEvent('voice:downloaded', { detail: { voiceId } }));
-      } catch {
-        // ignore
-      }
-    } catch (e: any) {
-      console.error('download_voice failed', e);
-      const msg = typeof e === 'string' ? e : e?.message ? String(e.message) : String(e);
-      setError(msg || 'Failed to download voice');
-    } finally {
-      setDownloadingVoiceId(null);
-    }
-  };
-
-  const togglePlay = async (voiceId: string) => {
-    if (!downloadedVoiceIds.has(voiceId)) return;
-    try {
-      await toggleVoice(voiceId);
-    } catch (e) {
-      console.error('toggleVoice failed', e);
-    }
-  };
-
-  const assignToActiveUser = () => {
-    // Chat is now driven by Characters (profiles), not direct personality assignment.
-    // Redirect to Characters page to select or create a character.
-    navigate('/profiles');
-  };
-
-  const deleteExperience = async (p: any) => {
-    if (p?.is_global) return;
-    try {
-      setError(null);
-      await api.deleteExperience(p.id);
-      await load();
-    } catch (err: any) {
-      setError(err?.message || 'Failed to delete experience');
-    }
-  };
-
-  const handleEdit = (p: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setModalMode('edit');
-    setSelectedExperience(p);
-    setModalOpen(true);
-  };
 
   const handleTabChange = (tab: ExperienceType) => {
     setActiveTab(tab);
@@ -304,260 +123,38 @@ export const Playground = () => {
         }}
       />
 
-      <Modal
-        open={infoOpen}
-        title={infoExperience?.name || '—'}
-        onClose={() => {
-          setInfoOpen(false);
-          setInfoExperience(null);
-        }}
-        panelClassName="w-full max-w-2xl"
-      >
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-          <div className="w-full h-[200px] rounded-[24px] border bg-orange-50/50 retro-cross border-gray-200 flex items-center justify-center overflow-hidden">
-            {infoExperience && imgSrcFor(infoExperience) && !brokenImgById[String(infoExperience.id)] ? (
-              <img
-                src={imgSrcFor(infoExperience) || ''}
-                alt=""
-                className="h-auto w-auto max-h-full max-w-full object-contain object-center"
-                onError={() => {
-                  setBrokenImgById((prev) => ({ ...prev, [String(infoExperience.id)]: true }));
-                }}
-              />
-            ) : (
-              <ImageIcon size={22} className="text-gray-500" />
-            )}
-          </div>
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-gray-500">About</div>
-            <div className="text-sm text-gray-700 whitespace-pre-wrap">
-              {infoExperience?.short_description || '—'}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-gray-500">Voice</div>
-            <div className="text-sm text-gray-900">
-              {infoExperience?.voice_id
-                ? voiceById.get(String(infoExperience.voice_id))?.voice_name || infoExperience.voice_id
-                : '—'}
-            </div>
-          </div>
-        </div>
-      </Modal>
-
       {activeTab === 'docs' ? (
         <DocsTab />
       ) : (
-        <>
-      {!activeUserId && !loading && (
-        <div className="retro-card font-mono text-sm mb-4" style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}>
-          Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then choose a character to start chatting.
-        </div>
-      )}
-      {activeUserId && profiles.length === 0 && !loading && (
-        <div className="retro-card font-mono text-sm mb-4" style={{ backgroundColor: 'rgba(124, 141, 255, 0.15)', border: '1px solid rgba(124, 141, 255, 0.4)' }}>
-          <div className="flex items-center gap-3 mb-2">
-            <Bot size={20} />
-            <span className="font-bold">Start chat with a Character</span>
-          </div>
-          <p className="text-sm mb-3">
-            Chat is driven by Characters (voice + personality pairs). Create your first character or choose an existing one.
-          </p>
-          <Link to="/profiles" className="retro-btn inline-flex items-center gap-2">
-            <Bot size={16} />
-            Go to Characters
-          </Link>
-        </div>
-      )}
-      {loading && (
-        <div className="retro-card font-mono text-sm">Loading…</div>
-      )}
-      {error && (
-        <div className="retro-card font-mono text-sm">{error}</div>
-      )}
-      {!loading && !error && experiences.length === 0 && (
-        <div className="retro-card font-mono text-sm">
-          No {activeTab === 'personality' ? 'personalities' : activeTab === 'game' ? 'games' : 'stories'} found.
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-8">
-        {sortedExperiences.map((p) => (
-          <div
-            key={p.id}
-            id={`experience-${p.id}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => assignToActiveUser()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') assignToActiveUser();
-            }}
-            className="retro-card relative group text-left cursor-pointer transition-shadow flex flex-col"
-style={{
-  padding: "0rem"
-}}
-          >
-            <div className="absolute top-2 right-2 flex flex-col items-center gap-2 z-10">
-              <button
-                type="button"
-                className="retro-icon-btn"
-                aria-label="Details"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setInfoExperience(p);
-                  setInfoOpen(true);
-                }}
-                title="Details"
-              >
-                <Maximize2 size={16} />
-              </button>
-              {!p.is_global && (
-                <button
-                  type="button"
-                  className="retro-icon-btn"
-                  aria-label="Edit"
-                  onClick={(e) => handleEdit(p, e)}
-                  title="Edit"
-                >
-                  <Pencil size={16} />
-                </button>
-              )}
-
-              {!p.is_global && (
-                <button
-                  type="button"
-                  className="retro-icon-btn"
-                  aria-label="Delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void deleteExperience(p);
-                  }}
-                  title="Delete"
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
+        <div className="pt-8 space-y-4">
+          {!activeUserId && !loading && (
+            <div className="retro-card font-mono text-sm mb-4" style={{ backgroundColor: 'rgba(255, 193, 7, 0.15)', border: '1px solid rgba(255, 152, 0, 0.4)' }}>
+              Select a member in <Link to="/users" className="underline font-bold">Members</Link> first, then choose a character to start chatting.
             </div>
-
-            <div className={`flex flex-col items-start gap-4`}>
-              <div className={`w-full`}>
-                {!p.is_global ? (
-                  <label
-                    className={`w-full h-[160px] rounded-t-[24px] ${imgSrcFor(p) ? 'retro-dotted' : ''} bg-white flex items-center justify-center cursor-pointer overflow-hidden`}
-                    title="Upload image"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                    }}
-                  >
-                    {imgSrcFor(p) && !brokenImgById[String(p.id)] ? (
-                      <div className="w-full h-full flex items-center justify-center overflow-hidden">
-                        <img
-                          src={imgSrcFor(p) || ''}
-                          alt=""
-                          className="h-auto w-auto max-h-full max-w-full object-contain object-center origin-center transition-transform duration-200 group-hover:scale-105"
-                          onError={() => {
-                            setBrokenImgById((prev) => ({ ...prev, [String(p.id)]: true }));
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <ImageIcon size={18} className="text-gray-600" />
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0] || null;
-                        if (!f) return;
-                        try {
-                          const buf = await f.arrayBuffer();
-                          let binary = '';
-                          const bytes = new Uint8Array(buf);
-                          const chunkSize = 0x8000;
-                          for (let i = 0; i < bytes.length; i += chunkSize) {
-                            const chunk = bytes.subarray(i, i + chunkSize);
-                            binary += String.fromCharCode(...chunk);
-                          }
-                          const b64 = btoa(binary);
-                          const ext = (f.name.split('.').pop() || '').toLowerCase();
-                          const savedPath = await api.saveExperienceImageBase64(
-                            String(p.id),
-                            b64,
-                            ext || null
-                          );
-
-                          await api.updateExperience(String(p.id), { img_src: savedPath?.path || savedPath });
-                          await load();
-                        } catch (err: any) {
-                          setError(err?.message || 'Failed to save image');
-                        }
-                      }}
-                    />
-                  </label>
-                ) : (
-                  <div className="w-full h-[160px] rounded-t-[24px] bg-orange-50/50 retro-cross flex items-center justify-center overflow-hidden">
-                    {imgSrcFor(p) && !brokenImgById[String(p.id)] ? (
-                      <div className="w-full h-full flex items-center justify-center overflow-hidden">
-                        <img
-                          src={imgSrcFor(p) || ''}
-                          alt=""
-                          className="h-auto w-auto max-h-full max-w-full object-contain object-center origin-center transition-transform duration-200 group-hover:scale-105"
-                          onError={() => {
-                            setBrokenImgById((prev) => ({ ...prev, [String(p.id)]: true }));
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <ImageIcon size={18} className="text-gray-600" />
-                    )}
-                  </div>
-                )}
+          )}
+          {activeUserId && !(activeSession?.active_personality_id ?? activeUser?.current_personality_id) && !loading && (
+            <div className="retro-card font-mono text-sm mb-4" style={{ backgroundColor: 'rgba(124, 141, 255, 0.15)', border: '1px solid rgba(124, 141, 255, 0.4)' }}>
+              <div className="flex items-center gap-3 mb-2">
+                <Bot size={20} />
+                <span className="font-bold">Choose a character</span>
               </div>
-
-              <div className="min-w-0 flex-1 p-4">
-                <h3 className="text-lg font-black leading-tight wrap-break-word retro-clamp-2">{p.name}</h3>
-                <p className="text-gray-600 text-xs font-medium mt-2 retro-clamp-2">
-                  {p.short_description ? String(p.short_description) : '—'}
-                </p>
-              </div>
+              <p className="text-sm mb-3">
+                Pick a character (personality) to chat with. Voice is set on the Voices page.
+              </p>
+              <Link to="/profiles" className="retro-btn inline-flex items-center gap-2">
+                <Bot size={16} />
+                Go to Characters
+              </Link>
             </div>
-
-            <div className="mt-auto border-t border-gray-200 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold uppercase tracking-wider text-gray-400">Voice</div>
-                  <Link
-                    to={`/voices?voice_id=${encodeURIComponent(p.voice_id)}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="block text-xs font-bold truncate"
-                    title="View voice"
-                  >
-                    {voiceById.get(p.voice_id)?.voice_name || p.voice_id}
-                  </Link>
-                </div>
-
-                <div className="shrink-0">
-                  <VoiceActionButtons
-                    voiceId={String(p.voice_id)}
-                    isDownloaded={downloadedVoiceIds.has(String(p.voice_id))}
-                    downloadingVoiceId={downloadingVoiceId}
-                    onDownload={(id) => downloadVoice(id)}
-                    onTogglePlay={(id) => togglePlay(id)}
-                    isPlaying={playingVoiceId === String(p.voice_id)}
-                    isPaused={isPaused}
-                    stopPropagation
-                    size="small"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-        </>
+          )}
+          {loading && (
+            <div className="retro-card font-mono text-sm mb-4">Loading…</div>
+          )}
+          {error && (
+            <div className="retro-card font-mono text-sm mb-4">{error}</div>
+          )}
+          <Conversations noHeader />
+        </div>
       )}
     </div>
   );

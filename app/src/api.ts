@@ -458,6 +458,22 @@ export const api = {
     });
   },
 
+  // Device games (WASM-based or native)
+  startDeviceGame: async (experienceId: string) => {
+    return request(`/device/start_game`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ experience_id: experienceId }),
+    });
+  },
+
+  stopDeviceGame: async () => {
+    return request(`/device/stop_game`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+  },
+
   /**
    * Switch to a new LLM model. Downloads the model first, then hot-swaps it.
    * Returns an async generator that yields progress updates.

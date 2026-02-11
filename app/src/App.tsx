@@ -2,7 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Layout } from "./components/Layout";
-import { Playground } from "./pages/Playground";
+// Legacy Playground (tabs) is kept for now but not used in routes
+// import { Playground } from "./pages/Playground";
 import { PacksPage } from "./pages/PacksPage";
 import { UsersPage } from "./pages/Users";
 import { Conversations } from "./pages/Conversations";
@@ -12,8 +13,9 @@ import { ChatModePage } from "./pages/ChatMode";
 import { SetupPage } from "./pages/Setup";
 import { ModelSetupPage } from "./pages/ModelSetup";
 import { VoicesPage } from "./pages/Voices";
-import { PersonalitiesPage } from "./pages/Personalities";
 import { ProfilesPage } from "./pages/Profiles";
+import { ChatPage } from "./pages/ChatPage";
+import { DocsPage } from "./pages/DocsPage";
 import { api } from "./api";
 import { STARTUP_DEFAULT_MESSAGE } from "./constants";
 import "./App.css";
@@ -115,11 +117,12 @@ function App() {
           <Route path="/model-setup" element={<ModelSetupPage />} />
 
           <Route path="/" element={<SetupGate />}>
-            <Route index element={<Playground />} />
-            <Route path="playground" element={<Playground />} />
+            <Route index element={<ChatPage />} />
+            <Route path="playground" element={<ChatPage />} />
+            <Route path="docs" element={<DocsPage />} />
             <Route path="packs" element={<PacksPage />} />
             <Route path="profiles" element={<ProfilesPage />} />
-            <Route path="personalities" element={<PersonalitiesPage />} />
+            <Route path="personalities" element={<Navigate to="/profiles" replace />} />
             <Route path="voices" element={<VoicesPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="conversations" element={<Conversations />} />
